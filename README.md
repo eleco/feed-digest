@@ -1,4 +1,8 @@
-# X Feed Digest
+# Feed Digest
+
+An unofficial reader for X (Twitter).
+
+Not affiliated with or endorsed by X Corp.
 
 A TypeScript Chrome extension that samples Following and For You into a local reading digest. A separate static Vite website is ready for Vercel; the website never receives feed data or API keys. No Next.js, backend, cloud database, shared model key or hosted account.
 

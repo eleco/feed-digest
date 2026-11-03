@@ -1,6 +1,6 @@
 # Security
 
-This is a developer preview. Before publication the maintainer must configure a private vulnerability-reporting channel (for example GitHub private vulnerability reporting). Do not post keys, account information, feed captures or exploit payloads containing personal information in public issues.
+This is a developer preview. Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/eleco/feed-digest/security/advisories/new). Do not post keys, account information, feed captures or exploit payloads containing personal information in public issues.
 
 Security boundaries:
 

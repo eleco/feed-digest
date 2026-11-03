@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- New scans keep All saved posts selected so new posts appear alongside earlier scans; individual scan views remain available in Scan history.
+
 - AI analysis retries rate limits, server errors, timeouts and network drops up to three times, honouring Retry-After. A batch that still fails or returns unusable output is skipped and later batches continue; three failed batches in a row, or a rejected key, model or price, stop the run.
 
 - Always advance the Following checkpoint to the newest post of each completed scan, even when a limit stopped the scan before the old checkpoint, so one long gap no longer makes every later scan run to its limits. For You no longer uses a checkpoint.

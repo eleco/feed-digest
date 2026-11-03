@@ -2046,7 +2046,7 @@ test("digest shows every collected post beyond ten and restores older truncated 
   expect((await stores(page)).posts).toHaveLength(15);
 });
 
-test("starting a scan replaces a selected older scan with live latest results", async () => {
+test("starting a scan adds live results to all saved posts", async () => {
   const page = await context.newPage();
   await page.goto(base + "/digest.html");
   const post = fixturePost("777");
@@ -2087,28 +2087,28 @@ test("starting a scan replaces a selected older scan with live latest results", 
   );
   expect(started.ok).toBe(true);
   await expect(page.getByLabel("Saved posts", { exact: true })).toHaveValue(
-    "latest",
+    "all",
   );
   await expect(
     page.getByRole("button", { name: "Scan both feeds ↗", exact: true }),
   ).toBeEnabled({ timeout: 20000 });
-  await expect(page.locator("article.card")).toHaveCount(3);
-  await expect(page.locator(".all-authors")).toHaveText("All authors (3)");
+  await expect(page.locator("article.card")).toHaveCount(4);
+  await expect(page.locator(".all-authors")).toHaveText("All authors (4)");
   await expect(
     page.locator('[data-author="example"] .author-count'),
-  ).toHaveText("3");
+  ).toHaveText("4");
   expect(
     await page
       .locator("article.card")
       .evaluateAll((cards) =>
         cards.map((card) => (card as HTMLElement).dataset.postId).sort(),
       ),
-  ).toEqual(["100", "200", "300"]);
+  ).toEqual(["100", "200", "300", "777"]);
   await page.reload();
   await expect(page.getByLabel("Saved posts", { exact: true })).toHaveValue(
-    "latest",
+    "all",
   );
-  await expect(page.locator("article.card")).toHaveCount(3);
+  await expect(page.locator("article.card")).toHaveCount(4);
   expect((await stores(page)).posts).toHaveLength(4);
   await page.evaluate(() =>
     chrome.storage.session.set({ "key:jev": "never-export-this-key" }),
@@ -2122,6 +2122,70 @@ test("starting a scan replaces a selected older scan with live latest results", 
   const exported = gunzipSync(await readFile((await file.path())!)).toString();
   expect(JSON.parse(exported).posts).toHaveLength(4);
   expect(exported).not.toContain("never-export-this-key");
+});
+
+test("a second scan adds eight new posts to the existing twenty-four", async () => {
+  const feedFixture = (count: number, firstId: number) => {
+    const feeds = {
+      following: Array.from({ length: count }, (_, i) =>
+        card(String(firstId + i), `Synthetic following post ${firstId + i}`),
+      ).join(""),
+      "for-you": Array.from({ length: count }, (_, i) =>
+        card(
+          String(firstId + count + i),
+          `Synthetic recommended post ${firstId + count + i}`,
+        ),
+      ).join(""),
+    };
+    return fixture.replace(
+      /const feeds=.*?;\n/,
+      `const feeds=${JSON.stringify(feeds)};\n`,
+    );
+  };
+  fixtureHtml = feedFixture(12, 1000);
+  const page = await context.newPage();
+  await page.goto(base + "/digest.html");
+  await page.evaluate(async (settings) => {
+    await chrome.storage.local.set({ settings: { ...settings, maxPosts: 12 } });
+  }, fixtureRun().settings);
+  const scan = page.getByRole("button", {
+    name: "Scan both feeds ↗",
+    exact: true,
+  });
+  await scan.click();
+  await expect(page.locator("article.card")).toHaveCount(24, {
+    timeout: 20000,
+  });
+  await expect(scan).toBeEnabled({ timeout: 20000 });
+
+  fixtureHtml = feedFixture(4, 2000);
+  await page.evaluate(async (settings) => {
+    await chrome.storage.local.set({ settings: { ...settings, maxPosts: 4 } });
+  }, fixtureRun().settings);
+  await scan.click();
+  await expect(page.locator("article.card")).toHaveCount(32, {
+    timeout: 20000,
+  });
+  await expect(scan).toBeEnabled({ timeout: 20000 });
+  const ids = await page
+    .locator("article.card")
+    .evaluateAll((cards) =>
+      cards.map((node) => (node as HTMLElement).dataset.postId),
+    );
+  expect(new Set(ids).size).toBe(32);
+  expect(ids).toContain("1000");
+  expect(ids).toContain("2007");
+  expect((await stores(page)).posts).toHaveLength(32);
+  await page.reload();
+  await expect(page.locator("article.card")).toHaveCount(32);
+  await page.locator(".scan-history summary").click();
+  await expect(page.getByLabel("Saved posts", { exact: true })).toHaveValue(
+    "all",
+  );
+  await page.getByLabel("Saved posts", { exact: true }).selectOption("latest");
+  await expect(page.locator("article.card")).toHaveCount(8);
+  await page.getByLabel("Saved posts", { exact: true }).selectOption("all");
+  await expect(page.locator("article.card")).toHaveCount(32);
 });
 
 test("saved posts survive later scans and retain AI metadata", async () => {

@@ -152,6 +152,9 @@ async function start() {
   });
   await watchRun();
   try {
+    // A new scan adds to the saved collection. Set this before opening the
+    // monitor so popup-started scans cannot inherit an older scan-only view.
+    await chrome.storage.local.set({ digestScope: "all" });
     const monitor = await chrome.tabs.create({
       url: chrome.runtime.getURL("digest.html"),
       active: false,

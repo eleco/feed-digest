@@ -125,7 +125,7 @@ const scan = button(
   "Scan both feeds ↗",
   async () => {
     await command("start");
-    scope = "latest";
+    scope = "all";
     await chrome.storage.local.set({ digestScope: scope });
     await refresh(true);
   },
@@ -1417,7 +1417,7 @@ function refresh(force = false): Promise<void> {
 async function refreshNow(force: boolean) {
   const [next, latest] = await Promise.all([current(), lastScan()]);
   if (latestScanId && latest && latest.id !== latestScanId) {
-    scope = "latest";
+    scope = "all";
     await chrome.storage.local.set({ digestScope: scope });
   }
   if (abort && (!next || next.id !== rankingId || next.state !== "ranking"))

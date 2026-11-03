@@ -8,6 +8,12 @@ A TypeScript Chrome extension that samples Following and For You into a local re
 
 **Developer preview, not a verified live-X release.** Browser integration tests use synthetic X pages. Real X selectors, real provider requests, unattended scheduling, and Windows/Linux behavior need the manual smoke tests below. X explicitly prohibits non-API automation, including website scripting, and warns of account suspension in its [automation rules](https://help.x.com/en/rules-and-policies/x-automation). DOM access does not establish compliance. Resolve platform-rule compatibility before public release.
 
+## Why this project
+
+Constantly checking the X feed is distracting and time-consuming. There is always another post to read, and a quick catch-up can easily turn into endless scrolling.
+
+Feed Digest is built for a simpler habit: run a scan once a day, collect new posts into one reading list, review them, and be done. The goal is to catch up on your own terms, then close the feed and get back to your day without repeatedly checking for updates.
+
 ## Build and install
 
 Node 22.12+ (Node 24 recommended), npm, desktop Chrome 120+.

@@ -1,0 +1,45 @@
+# Architecture and implementation decisions
+
+The user's stack choice is TypeScript/Vercel. The implementation preserves the brief's local Chrome-extension boundary and adds an independent static install/help site on Vercel. Vercel hosts no runtime inference or collection service. No user preference response was required to implement this conservative split.
+
+## Modules
+
+- `src/content/adapter.ts`: all X selectors, English tab matching, account identity, barriers, outer-author/quote separation and feed-transition proof. It never calls undocumented endpoints.
+- `src/content/index.ts`: sequential Following/For You collection, observer, local count/time/scroll bounds and small persisted batches. The script exists only in a dedicated tab injected by the worker after a `/home` check. Optional image hiding uses a tab-scoped stylesheet from the adapter through [Chrome scripting](https://developer.chrome.com/docs/extensions/reference/api/scripting), with the existing permission. It collapses post image containers and images except inline emoji, applies to newly rendered cards, and is removed when stopping or leaving home. Image requests are not intercepted.
+- `src/background/index.ts`: serialized control messages, transactional run lease, sender validation, tab ownership, state transitions and recovery. No always-running timer or artificial keepalive. Chrome events rehydrate state.
+- `src/storage`: native IndexedDB transactions and trusted Chrome local/session storage. Posts merge by canonical ID; observations retain run/feed provenance. Pruning removes references/feedback for deleted posts. Pinned records may exceed the cap by explicit user choice.
+- `src/ranking`: deterministic scorer/shortlist/diversity, provider adapters, bounded prompt, strict JSON validation, cache, daily UTC reservations and extension-page orchestration. Navigator Locks prevents concurrent ranking pages; run/generation checks prevent stale commits.
+- `src/ui`: accessible framework-free popup, settings and full-page digest. User/post/model text uses safe DOM APIs. The full-page digest stays open for AI inference and polls persisted progress; closing it causes cancellation/interruption rather than a service-worker keepalive.
+- `site`: independent static TypeScript/CSS/HTML app. A synthetic preview is clearly labelled. `vercel.json` chooses only `site-dist`.
+
+## State and recovery
+
+The absence of a current run is idle. Runs move collecting → ranking (online enabled) → completed/partial. Collection exceptions become blocked (no captured posts) or partial. User cancellation yields cancelled; expired leases/required-tab closure yield interrupted. A committed Basic digest provides a fallback before optional AI. A session-only browser identity prevents stale tab IDs from being treated as owned after a full browser restart or extension reload. A service-worker restart does not erase IndexedDB state; content messages wake it and validate the persisted lease. Ranking page loss is reported; automatic inference resumption is intentionally not promised. Successful independent post assessments are reusable for 30 days when the post ID, full text/quote/excerpt flag, exclusions, provider, model and prompt-version hash match. Only uncached posts enter generation batches. Cached opaque IDs are remapped and schema-validated for the current post; malformed/expired entries are regenerated. Prompt version 4 removes reading interests while retaining bounded sector/tone labels and independent assessments, so legacy batch caches are not reused. Cache-hit counts are disclosed in digests.
+
+A collector lease has a fixed upper limit and is not extended by arbitrary messages. Scans start manually; daily scheduling was removed and install/startup clear any leftover schedule alarm. A one-minute recovery alarm exists only while a scan or analysis is active and is cleared when it finishes. Retention pruning runs at install, browser startup and scan start, and writes back only records it changed. No inactive-rendering claim is made.
+
+## Ranking and budget constraints
+
+Basic filters media-only/promoted/excluded/rejected posts and exact text repetition. It uses recency, preferred author/feedback and a very small engagement tie-breaker. The online shortlist reserves up to ten discovery slots after the top thirty. Text is capped per post, requests use conservative UTF-8 byte-based input token upper bounds, and generation is serial. Batches too large for the input budget are skipped to Basic.
+
+Output must contain only mapped opaque IDs, finite scores in [0,100], bounded strings/flags. A malformed batch is discarded while prior good batches survive. AI and Basic items are labelled individually. Near-duplicate story filtering is a conservative word-overlap heuristic, not semantic understanding. Novelty against previous digests is a remaining limitation and is explicitly disclosed.
+
+Daily request reservations are atomic and count retries/failures. OpenRouter catalogue pricing must be known and all listed prices zero. Routing sets zero maximum prices and disables provider fallback; no tools/plugins or alternate models are requested. Paid OpenAI and Anthropic require a supported model, key and host permission. Request/token limits remain; manual token prices, estimated costs and the local daily spend ceiling have been removed. Billing is managed by the provider. 401/402/429 end online processing. A server-error retry is allowed once only if its Retry-After and all budgets fit. No model/provider/key/account rotation.
+
+## Source verification (27 September 2026)
+
+- [Chrome storage](https://developer.chrome.com/docs/extensions/reference/api/storage): trusted-context access, session storage lifecycle.
+- [Chrome alarms](https://developer.chrome.com/docs/extensions/reference/api/alarms): browser sleep and missed alarms.
+- [OpenRouter catalogue](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties), [provider routing](https://openrouter.ai/docs/guides/routing/provider-selection): per-token pricing and zero max-price constraints.
+- [OpenAI GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), [nano](https://developers.openai.com/api/docs/models/gpt-4.1-nano): supported Chat Completions text models.
+- [X automation rules](https://help.x.com/en/rules-and-policies/x-automation): expressly prohibits non-API website scripting and warns of suspension. This is a release risk, not a claim of compliance.
+- [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite): static build/output configuration.
+- CI pins reviewed against the official commit pages: [checkout 11bd719](https://github.com/actions/checkout/commit/11bd71901bbe5b1630ceea73d27597364c9af683), [setup-node 49933ea](https://github.com/actions/setup-node/commit/49933ea5288caeca8642d1e84afbd3f7d6820020). Pinned commits still require periodic dependency/security review.
+
+The collector keeps a per-feed WeakMap of extracted cards. Child, text and attribute mutations invalidate affected cards and containing quoted-post cards; incomplete cards are retried. Each feed/scan gets a fresh map so observations stay current. This avoids repeat DOM extraction, not X network loading or scroll waits.
+
+Feed checkpoints live in IndexedDB meta records keyed by feed and bound to the verified account. After identity validation, the feed command returns only that feed’s saved post ID. Batch commits track each run’s first (newest) accepted post per feed. A completed feed saves that post as its checkpoint atomically with the run when the old checkpoint was reached, the feed ran out of posts, or no checkpoint existed; incomplete/empty feeds do not. If another limit stops the scan first, the old boundary is kept until a later scan covers the gap or it is reset. The collector includes the checkpoint post, stops accepting later cards and reports the checkpoint stop reason. Normal bounds remain the fallback when an anchor is absent. Reset is rejected while a run is active; Delete all data clears checkpoints.
+
+Claude uses the native Anthropic Messages endpoint with user-provided x-api-key and API-version headers; the browser-access header matches the official SDK. The only configured Claude model is the pinned Haiku 4.5 snapshot. Connection checks use GET Models without generating tokens. Source references: [Messages](https://platform.claude.com/docs/en/api/messages/create), [Get a Model](https://platform.claude.com/docs/en/api/models/retrieve), [official SDK](https://github.com/anthropics/anthropic-sdk-typescript), [pricing](https://platform.claude.com/docs/en/about-claude/pricing). Request reservations, cancellation, per-post caches and Basic fallback apply to Claude as to OpenAI.
+
+Outgoing links are extracted from rendered anchors only, limited to 20 distinct URL/source pairs, restricted to HTTP(S) without credentials, and never followed automatically. Unsafe links are rejected at collection validation and rendering. AI does not generate the links. Optional categories are enumerated/validated, capped at three sectors and two tones, and stored with ranked items.

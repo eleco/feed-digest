@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Your posts · X Feed Digest</title>
+    <script type="module" src="/reader.ts"></script>
+  </head>
+  <body>
+    <header>
+      <a href="/">X Feed Digest</a><span>Your saved posts, online</span>
+    </header>
+    <main>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">YOUR COLLECTION</p>
+          <h1>Your posts</h1>
+          <p id="snapshotDate">Loading your collection…</p>
+        </div>
+        <label class="upload"
+          >Upload saved posts<input
+            id="upload"
+            type="file"
+            accept=".gz,application/gzip"
+            hidden
+        /></label>
+      </div>
+      <p id="status" role="status" aria-live="polite"></p>
+      <details id="uploadHelp">
+        <summary>How to update your collection</summary>
+        <p>
+          In the Chrome extension, click
+          <strong>Export for online reader</strong>. Upload the downloaded file
+          here. Each upload replaces the online copy; posts in Chrome stay
+          unchanged.
+        </p>
+      </details>
+      <section class="controls" aria-label="Filter posts">
+        <label
+          >Search<input
+            id="search"
+            aria-label="Search"
+            type="search"
+            placeholder="Text, name or @handle" /></label
+        ><label
+          >When<select id="when" aria-label="When">
+            <option value="all">All dates</option>
+            <option value="today">Today</option>
+            <option value="week">Last 7 days</option>
+          </select></label
+        ><label
+          >Sort<select id="sort" aria-label="Sort">
+            <option value="newest">Newest first</option>
+            <option value="insight">Most insightful (AI)</option>
+            <option value="oldest">Oldest first</option>
+          </select></label
+        ><label
+          >Sector<select id="sector" aria-label="Sector">
+            <option value="all">All sectors</option>
+          </select></label
+        ><label class="check"
+          ><input id="pins" type="checkbox" />Only pinned posts</label
+        ><label class="check"
+          ><input id="links" type="checkbox" />Only posts with links</label
+        >
+      </section>
+      <p id="count" aria-live="polite"></p>
+      <section id="posts" aria-label="Saved posts"></section>
+    </main>
+  </body>
+</html>

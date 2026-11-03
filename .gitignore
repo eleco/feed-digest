@@ -1,0 +1,15 @@
+node_modules/
+dist/
+site-dist/
+releases/
+.env*
+!.env.example
+*.log
+playwright-report/
+test-results/
+profiles/
+exports/
+.reader-data/
+.vercel/
+.DS_Store
+.vercel

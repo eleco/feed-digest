@@ -1,0 +1,12 @@
+/* Shared by every extension page so popup, settings, activity and digest match. */
+:root {
+  --paper: #f7f7f5;
+  --white: #fff;
+  --ink: #17181a;
+  --muted: #6f6f6f;
+  --line: #e4e4e0;
+  --accent: oklch(0.55 0.15 255);
+  --orange: var(--accent);
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --serif: "Newsreader", Georgia, serif;
+}

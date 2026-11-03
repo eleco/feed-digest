@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="A local Chrome extension for a smaller, more thoughtful reading digest from X."
+    />
+    <title>X Feed Digest — Less scrolling. More signal.</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="#">◒ &nbsp; X Feed Digest</a>
+      <nav aria-label="Main navigation">
+        <a href="/reader">Your posts</a><a href="#how">How it works</a
+        ><a href="#privacy">Privacy first</a
+        ><a class="button small" href="#install">Get the extension ↗</a>
+      </nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow">
+            <span class="dot"></span> YOUR FEED, THOUGHTFULLY EDITED
+          </div>
+          <h1>Good ideas.<br />A little less <em>noise.</em></h1>
+          <p class="intro">
+            Turn your Following and For You feeds into a short, considered
+            reading list. Keep the interesting parts. Get on with your day.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#install"
+              >Set up X Feed Digest <span>↗</span></a
+            ><a class="text-link" href="#preview">Take a look ↓</a>
+          </div>
+          <p class="fine">
+            Made for desktop Chrome &nbsp;·&nbsp; Stored on your device<br />Basic
+            mode has no model fees. Optional AI uses your own key.
+          </p>
+        </div>
+        <div
+          class="hero-art"
+          aria-label="Illustration of a curated reading list"
+        >
+          <div class="art-orbit"></div>
+          <div class="art-orbit second"></div>
+          <div class="paper-note">
+            <span class="note-label">THE DAILY EDIT</span>
+            <div class="note-line"></div>
+            <h2>A few things<br />worth your time.</h2>
+            <div class="mini-row">
+              <span>01</span>
+              <div>
+                <b>An idea that changes your perspective</b><i></i><i></i>
+              </div>
+            </div>
+            <div class="mini-row">
+              <span>02</span>
+              <div>
+                <b>Something useful to put into practice</b><i></i><i></i>
+              </div>
+            </div>
+            <div class="mini-row">
+              <span>03</span>
+              <div>
+                <b>A discovery outside your usual orbit</b><i></i><i></i>
+              </div>
+            </div>
+            <div class="note-footer">FOLLOWING + FOR YOU <span>◒</span></div>
+          </div>
+          <span class="art-caption">A smaller feed. A wider perspective.</span>
+        </div>
+      </section>
+      <section class="principles">
+        <div>
+          <span>01 / COLLECT</span>
+          <p>Both feeds. One bounded scan.</p>
+        </div>
+        <div>
+          <span>02 / CONSIDER</span>
+          <p>Your reading list. Room for discovery.</p>
+        </div>
+        <div>
+          <span>03 / READ</span>
+          <p>Every collected post, ready to browse.</p>
+        </div>
+      </section>
+      <section id="preview" class="preview">
+        <div class="section-top">
+          <div>
+            <div class="eyebrow">A GLIMPSE OF YOUR READING ROOM</div>
+            <h2>Less to read.<br />More to take away.</h2>
+          </div>
+          <p>
+            A separate space for what catches your interest.<br /><span
+              class="sample-label"
+              >Illustrative digest · synthetic sample posts</span
+            >
+          </p>
+        </div>
+        <div class="digest-window">
+          <div class="window-top">
+            <span>◒ &nbsp; Your digest</span
+            ><span class="local"><span class="dot"></span> Saved locally</span>
+          </div>
+          <div class="digest-body">
+            <div class="sample-feed">
+              <div class="filter-row">
+                <button aria-pressed="true" data-filter="all">All posts</button
+                ><button aria-pressed="false" data-filter="following">
+                  Following</button
+                ><button aria-pressed="false" data-filter="for-you">
+                  For You
+                </button>
+              </div>
+              <article data-feed="following">
+                <span class="number">01</span>
+                <div>
+                  <div class="byline">
+                    <span class="avatar">FS</span><b>Fieldwork Studio</b
+                    ><span>· Synthetic example</span>
+                  </div>
+                  <div class="tags">
+                    <span>FOLLOWING</span><span>SOURCE EXCERPT</span>
+                  </div>
+                  <p class="post">
+                    The best way to understand a public space is to sit in it.
+                    Count where people pause, not just where they pass through.
+                    The unplanned uses often tell you more than the blueprint.
+                  </p>
+                  <div class="why">A concrete example of urban design.</div>
+                </div>
+              </article>
+              <article data-feed="for-you">
+                <span class="number">02</span>
+                <div>
+                  <div class="byline">
+                    <span class="avatar peach">TN</span><b>The Notebook</b
+                    ><span>· Synthetic example</span>
+                  </div>
+                  <div class="tags">
+                    <span>FOR YOU</span><span>SOURCE EXCERPT</span>
+                  </div>
+                  <p class="post">
+                    Keep a “what surprised me” column in your project notes. A
+                    list of surprises is often a better starting point for your
+                    next experiment than a list of achievements.
+                  </p>
+                  <div class="why">
+                    Discovery pick with readable, practical text.
+                  </div>
+                </div>
+              </article>
+            </div>
+            <aside>
+              <div class="eyebrow">AT A GLANCE</div>
+              <div class="sample-number">02 <span>sample posts</span></div>
+              <hr />
+              <h3>A reading aid,<br />not a truth detector.</h3>
+              <p>
+                Basic ranking uses simple, transparent rules. Optional AI can
+                add categories, tone labels and short takeaways.
+              </p>
+              <div class="tag">NO AI IN THIS EXAMPLE</div>
+              <p class="small-text">
+                Real digests include original links, feed provenance and
+                collection time.
+              </p>
+            </aside>
+          </div>
+        </div>
+      </section>
+      <section id="how" class="how">
+        <div class="eyebrow">A SMALLER DAILY RITUAL</div>
+        <h2>From open tabs<br />to a clearer head.</h2>
+        <div class="steps">
+          <div>
+            <span class="step-number">01</span>
+            <h3>Tell it what matters.</h3>
+            <p>
+              Start with Basic mode, or explicitly set up a provider using your
+              own API key.
+            </p>
+          </div>
+          <div>
+            <span class="step-number">02</span>
+            <h3>Let a scan do the scrolling.</h3>
+            <p>
+              A dedicated, visible X tab samples both feeds. Each feed stops at
+              100 posts, 90 seconds, or an earlier limit by default. Configure
+              up to 1,000 posts and 100 scroll steps per feed in Settings. Stop
+              whenever you like.
+            </p>
+          </div>
+          <div>
+            <span class="step-number">03</span>
+            <h3>Read at your own pace.</h3>
+            <p>
+              Open your digest, give useful feedback, or export Markdown and
+              JSON. Every collected post stays visible, with AI categories and
+              takeaways when available.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section id="privacy" class="privacy">
+        <div>
+          <div class="eyebrow">LOCAL BY DESIGN</div>
+          <h2>Your reading habits<br />are your business.</h2>
+        </div>
+        <div>
+          <p>
+            Posts, preferences and digests live in your browser by default. No
+            analytics or tracking. The optional online reader displays only the
+            collection you explicitly export and upload; it cannot access your X
+            account or AI API keys.
+          </p>
+          <p>
+            Online AI is optional. Clicking Analyse with AI sends collected text
+            and quoted text to OpenRouter and its model providers, or to OpenAI
+            or Anthropic Claude. Scanning alone makes no AI requests. You can
+            stop analysis or remove your key at any time.
+          </p>
+          <div class="privacy-points">
+            <span>↳ Session-only keys by default</span
+            ><span>↳ Export on your terms</span
+            ><span>↳ Delete everything locally</span>
+          </div>
+        </div>
+      </section>
+      <section id="install" class="install">
+        <div class="eyebrow">READY FOR A MORE INTENTIONAL FEED?</div>
+        <h2>Make a little room<br />for the good stuff.</h2>
+        <p>
+          This is a developer preview, installed locally in Chrome.<br />No
+          Chrome Web Store listing or hosted account is required.
+        </p>
+        <ol>
+          <li>
+            From the project folder, run <code>npm ci && npm run build</code>.
+          </li>
+          <li>
+            Open <code>chrome://extensions</code> and enable Developer mode.
+          </li>
+          <li>
+            Choose <strong>Load unpacked</strong>, then select the
+            <code>dist</code> folder.
+          </li>
+          <li>
+            Sign into X normally, open the extension and choose
+            <strong>Scan both feeds</strong>.
+          </li>
+        </ol>
+        <details>
+          <summary>Limitations & platform rules</summary>
+          <p>
+            English X UI only. Live X selectors and real provider compatibility
+            still require an authorised smoke test. A scan samples rendered
+            posts; it does not read images, full threads or articles. Scheduling
+            is best effort and requires a visible tab unless explicitly enabled
+            to bring it forward.
+          </p>
+          <p>
+            X’s automation rules prohibit scripting its website and warn of
+            account suspension. DOM access does not establish compliance or
+            account safety. Review
+            <a
+              href="https://help.x.com/en/rules-and-policies/x-automation"
+              target="_blank"
+              rel="noopener noreferrer"
+              >X’s current rules</a
+            >
+            before use or release.
+          </p>
+        </details>
+      </section>
+    </main>
+    <footer>
+      <a class="brand" href="#">◒ &nbsp; X Feed Digest</a
+      ><span>Built for a more thoughtful internet.</span
+      ><a href="#privacy">Privacy & data</a>
+    </footer>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

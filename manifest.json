@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "X Feed Digest",
+  "version": "0.1.0",
+  "description": "A bounded, local reading digest from your Following and For You feeds.",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "alarms", "scripting"],
+  "host_permissions": ["https://x.com/*"],
+  "optional_host_permissions": [
+    "https://openrouter.ai/*",
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.typesafe.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "X Feed Digest"
+  },
+  "options_page": "settings.html",
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; object-src 'none'; connect-src https://openrouter.ai https://api.openai.com https://api.anthropic.com https://api.typesafe.ai; style-src 'self'; img-src 'self' data:; base-uri 'none'"
+  }
+}

@@ -1,0 +1,10 @@
+.vercel
+.env*
+.reader-data
+profiles
+exports
+test-results
+playwright-report
+releases
+dist
+node_modules

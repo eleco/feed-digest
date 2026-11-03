@@ -9,7 +9,6 @@ import {
 import { mkdtemp, rm, cp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
-import { gunzipSync } from "node:zlib";
 import { card, post as fixturePost, run as fixtureRun } from "../fixtures/data";
 let context: BrowserContext, profile: string, base: string;
 let fixtureHtml: string;
@@ -312,7 +311,7 @@ test("settings autosave rapid edits, reject invalid limits and persist after rel
   await expect(page.locator("#maxSteps")).toHaveValue("100");
   await expect(page.locator("#hideImages")).toBeChecked();
 });
-test("renders hostile text as inert text and exports escaped Markdown", async () => {
+test("renders hostile post text as inert text", async () => {
   const page = await context.newPage();
   await page.goto(base + "/digest.html");
   await page.evaluate(async () => {
@@ -1876,12 +1875,7 @@ test("pregranted Claude AI activity updates live, shows usage and classification
   await expect(page.locator(".audit-post")).toHaveCount(0);
   await page.getByLabel("Find a post, category or tone").fill("finance");
   await expect(page.locator(".audit-post")).toHaveCount(3);
-  const downloaded = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export scan log" }).click();
-  const download = await downloaded;
-  const exported = await readFile((await download.path())!, "utf8");
-  expect(exported).not.toContain("synthetic-audit-key");
-  expect(JSON.parse(exported).audit.posts).toHaveLength(3);
+  await expect(page.locator("body")).not.toContainText("synthetic-audit-key");
   await page.screenshot({
     path: "test-results/ai-activity.png",
     fullPage: true,
@@ -2110,18 +2104,6 @@ test("starting a scan adds live results to all saved posts", async () => {
   );
   await expect(page.locator("article.card")).toHaveCount(4);
   expect((await stores(page)).posts).toHaveLength(4);
-  await page.evaluate(() =>
-    chrome.storage.session.set({ "key:jev": "never-export-this-key" }),
-  );
-  await page.locator(".scan-history summary").click();
-  const downloaded = page.waitForEvent("download");
-  await page
-    .getByRole("button", { name: "Export for online reader", exact: true })
-    .click();
-  const file = await downloaded;
-  const exported = gunzipSync(await readFile((await file.path())!)).toString();
-  expect(JSON.parse(exported).posts).toHaveLength(4);
-  expect(exported).not.toContain("never-export-this-key");
 });
 
 test("a second scan adds eight new posts to the existing twenty-four", async () => {
@@ -2660,4 +2642,21 @@ test("scan captures role-link views and pointer-hover followers into stored post
     expect(post.views).toBe(24000);
     expect(post.followers).toBe(3000);
   }
+});
+
+test("saved posts and AI activity have no export controls", async () => {
+  const page = await context.newPage();
+  await page.goto(base + "/digest.html");
+  await page.locator(".scan-history summary").click();
+  await expect(
+    page.getByRole("button", { name: /export|download/i }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Saved posts", { exact: true })).toBeVisible();
+  await page.goto(base + "/activity.html");
+  await expect(
+    page.getByRole("heading", { name: "AI activity", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /export|download/i }),
+  ).toHaveCount(0);
 });

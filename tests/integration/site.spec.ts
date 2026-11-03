@@ -39,6 +39,11 @@ test("Vercel static site renders on desktop and mobile; sample feed filters work
     await expect(
       page.getByRole("heading", { name: "Good ideas. A little less noise." }),
     ).toBeVisible();
+    await expect(page.getByText(/export|upload|online reader/i)).toHaveCount(0);
+    const removedReader = await page.request.get(
+      `http://127.0.0.1:${address.port}/reader.html`,
+    );
+    expect(removedReader.status()).toBe(404);
     await page.getByRole("button", { name: "Following", exact: true }).click();
     await expect(page.locator("article:visible")).toHaveCount(1);
     await page.getByRole("button", { name: "All posts", exact: true }).click();

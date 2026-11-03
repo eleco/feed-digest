@@ -20,7 +20,7 @@ MVP includes:
 - Deduplicated local storage, configurable interests, online AI ranking, and a separate top-post digest.
 - A useful basic-ranking mode when no online provider is configured or available.
 - Optional daily scheduling, disabled initially, with explicit visibility and availability limitations.
-- Local Markdown/JSON export, feedback and data deletion.
+- Local saved posts, feedback and data deletion.
 
 Exclude hosted accounts, paid X API access, cloud databases, servers, billing, email/Telegram delivery, mobile support, Firefox support, image/video understanding, automatic linked-article fetching, vector databases and full-thread crawling. Do not add posting, liking, following or messaging actions. Do not build a Next.js website for this MVP.
 
@@ -100,7 +100,7 @@ Optional scheduling is part of the MVP, but is **best effort**, not an always-on
 
 Account handling: use one X account per browser profile for MVP. Detect a changed visible account identity when available and isolate stored data or require explicit reset; do not silently mix accounts. Document separate browser profiles as the supported alternative.
 
-Default retention: 30 days and a 5,000-post cap. Prune oldest unpinned records and maintain referential consistency. Provide Delete all data, including settings, posts, digests, feedback and checkpoints. Export only on user action.
+Default retention: 30 days and a 5,000-post cap. Prune oldest unpinned records and maintain referential consistency. Provide Delete all data, including settings, posts, digests, feedback and checkpoints.
 
 ## Ranking and summaries
 
@@ -109,11 +109,10 @@ Basic mode must be deterministic and labelled **Basic ranking — no AI analysis
 Online AI mode:
 
 - Implement a provider interface with two explicit choices: **OpenRouter free models** (suggested lowest-cost choice) and **OpenAI API** (paid option). Use documented HTTPS APIs; do not automate the ChatGPT website, reuse ChatGPT cookies, or suggest a ChatGPT subscription includes API credits. ChatGPT is the consumer app; the automated integration is the separately billed OpenAI API.
-- Add a manual **Copy AI prompt** export for users who prefer pasting a bounded selection of posts into ChatGPT themselves. No automatic response import is required in MVP. Clearly label this as a manual alternative that does not provide scheduled AI digests.
 - For OpenRouter, query the current model catalogue, show only available free entries with zero supported request costs, and let the user select one. Do not append `:free` to arbitrary model names or hardcode a model as permanently available. Fail closed if pricing is unknown, a selected free model disappears or its price changes. Never route to paid models automatically. Disable paid fallbacks and optional paid tools; account/provider policy still applies.
 - For OpenAI, allow a user-selected supported economical text model and show that usage is paid before enabling it. Verify current APIs, model availability and price information during implementation rather than inventing a model name or cost.
 - Request optional host permission only for the selected origin: `https://openrouter.ai/*` or `https://api.openai.com/*`. No arbitrary endpoint configuration in MVP. Verify browser-extension request compatibility before claiming support.
-- Keys belong to the user; no shared developer key in public source, build output or CI. Default to session-only key storage with trusted-extension access. Offer Remember key only with a clear warning that extension storage is not an encrypted vault; restrict it to trusted extension contexts. Never expose keys to content scripts, page DOM, model prompts, logs or exports. Mask keys in UI and provide Remove key. Unattended inference after restart requires explicit persistent-key opt-in; otherwise run Basic mode and show why.
+- Keys belong to the user; no shared developer key in public source, build output or CI. Default to session-only key storage with trusted-extension access. Offer Remember key only with a clear warning that extension storage is not an encrypted vault; restrict it to trusted extension contexts. Never expose keys to content scripts, page DOM, model prompts, logs. Mask keys in UI and provide Remove key. Unattended inference after restart requires explicit persistent-key opt-in; otherwise run Basic mode and show why.
 - Issue API calls from trusted extension code, not a page-script proxy. Validate senders, operations and payload sizes. Never accept a destination URL or arbitrary authenticated request from a content script. If direct user-key storage is unsuitable, report the constraint rather than hiding a developer-funded proxy behind the extension.
 - Before first use, show a sample outbound payload and link the selected provider's privacy/data-use policy. Send shortlisted text, relevant preferences and opaque candidate IDs; omit handles, URLs, engagement and prior-digest text unless needed for ranking. Keep full provenance locally and map IDs back after validation. Text itself may still contain personal information. Do not claim local-only processing or guaranteed zero retention. OpenRouter routes requests onward to model providers; disclose this.
 - Prefilter at most 40 candidates using cheap rules, reserving some slots outside exact keyword matches for discovery. Label sampled coverage. Group candidates into bounded batches (initially 10 posts each) to avoid one request per tweet.
@@ -139,8 +138,8 @@ Final selection: up to 10 posts, maximum two per author where alternatives quali
 - Keep permissions minimal and document each one. No `<all_urls>`, cookie, debugger or broad network interception permissions. Narrow host permissions to X and the selected optional HTTPS provider origin; Chrome host-permission paths are not a substitute for runtime URL checks.
 - Enforce extension CSP, validate message payloads, escape all post/model text, allow only validated HTTP(S) links and use safe external-link handling. Treat X text as hostile HTML/input.
 - State that X collection has no X API fee and Basic mode has no model fee. Free online models have variable availability/quotas; paid OpenAI usage is separate. Do not promise zero-cost or unlimited hosted inference.
-- Keep runtime data, browser profiles, logs with post text, exports, credentials, environment files and personal screenshots out of git. Use synthetic fixtures exclusively.
-- Default diagnostics contain counts/error codes, not feed contents. Diagnostic export is opt-in and previewable.
+- Keep runtime data, browser profiles, logs with post text, credentials, environment files and personal screenshots out of git. Use synthetic fixtures exclusively.
+- Default diagnostics contain counts/error codes, not feed contents.
 - Include a privacy policy and an accurate explanation that automated collection may be affected by X rules and interface changes. Review current applicable platform rules before release; do not assert that DOM access guarantees compliance or account safety.
 
 Write original code. Publicly visible code without a licence is not automatically reusable. If incorporating permissively licensed code, verify its licence and preserve required notices. Do not install or run another project's setup scripts without inspection.
@@ -163,7 +162,7 @@ Deliver:
 1. Scaffold and build: load the unpacked extension and open the popup/settings/digest page.
 2. DOM adapter: synthetic fixtures for original, reply, quote, repost, promoted, truncated and malformed posts; handle virtualised DOM updates and stale feed transitions.
 3. Bounded scanner: manual scan of both feeds, progress, cancellation, independent feed results and persistence. Validate live X selectors only with an authorised test session. If unavailable, mark live verification blocked and provide exact manual steps.
-4. Basic digest: deduplication, interests, provenance, exports and deletion.
+4. Basic digest: deduplication, interests, provenance and deletion.
 5. Online AI: provider connection check, free-model validation, key isolation, quota/cost controls, validated output, cache, deadlines and explicit fallback.
 6. Scheduling/recovery: alarms, stale lease, restart, sleep/wake, account change and focus limitations.
 7. Public release preparation: documentation, permission review, clean build, tests and synthetic demo data.
@@ -177,10 +176,10 @@ Meaningful acceptance cases:
 - Model output containing fake IDs, malformed JSON or embedded HTML cannot create fabricated cards or execute code.
 - Online provider unavailable or quota exhausted mid-run produces a clearly labelled partial/fallback digest, not silent failure.
 - Scheduled scans do not steal focus without opt-in or run multiple missed jobs after wake.
-- Delete all data removes stored content and scheduled configuration; Markdown/JSON export has correct links and escaping.
+- Delete all data removes stored content and scheduled configuration.
 - Network inspection confirms Basic mode makes no model requests; online mode contacts only the selected approved provider. Fixture tests mock both X and model providers and never spend credits.
-- Provider keys are absent from content-script messages, DOM, exports and logs. Removing a key clears all supported stores.
-- A 429, changed free-model price, unknown pricing or missing persistent key cannot trigger paid fallback or unbounded retries. Copy AI prompt works without an API key.
+- Provider keys are absent from content-script messages, DOM or logs. Removing a key clears all supported stores.
+- A 429, changed free-model price, unknown pricing or missing persistent key cannot trigger paid fallback or unbounded retries.
 - Delete all data also clears provider credentials, usage counters and cached model responses.
 - A live smoke test records Chrome/OS, X UI language, date, both-feed extraction counts and observed limitations. Never replace this with a claim based solely on unit tests.
 

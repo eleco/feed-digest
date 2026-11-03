@@ -54,7 +54,7 @@ export async function get<T>(s: Store, id: string): Promise<T | undefined> {
 export async function all<T>(s: Store): Promise<T[]> {
   return request((await db()).transaction(s).objectStore(s).getAll());
 }
-export async function savedArchive() {
+export async function savedCollection() {
   const tx = (await db()).transaction(
     ["posts", "runs", "digests", "feedback"],
     "readonly",
@@ -66,9 +66,6 @@ export async function savedArchive() {
     request<Feedback[]>(tx.objectStore("feedback").getAll()),
   ]);
   return {
-    format: "x-feed-digest-archive",
-    version: 1,
-    exportedAt: new Date().toISOString(),
     posts,
     runs,
     digests,

@@ -9,4 +9,4 @@ Expected behavior:
 Actual behavior and count-only error code:
 Synthetic reproduction steps:
 
-Do not include provider keys, account handles, feed exports or personal screenshots.
+Do not include provider keys, account handles, feed data or personal screenshots.

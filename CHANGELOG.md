@@ -30,13 +30,13 @@
 
 - Add publication-date From/To filters, defaulting to the last 24 hours, with Last 24 hours and All dates shortcuts.
 
-- Keep saved posts accessible across scans through a combined default view and dated history selector. Preserve AI annotations, analyse the selected collection, and export all saved scans as a JSON backup.
+- Keep saved posts accessible across scans through a combined default view and dated history selector. Preserve AI annotations, analyse the selected collection.
 
 - Restrict buy/sell and asset-type controls to Finance, clearing them when the sector changes. Add a persistent, autosaved word/phrase blacklist under digest visibility controls.
 
 - Add buy/sell recommendation and asset-type filters, with compact AI metadata and explicit not-checked status for older posts. Prompt version 9 refreshes earlier assessments when analysis is requested.
 
-- Display original collected posts and links instead of AI summaries, explanations, scores and category badges. Request only score/sector/tone metadata and preserve version 7 cache reuse; Markdown exports also use original text.
+- Display original collected posts and links instead of AI summaries, explanations, scores and category badges. Request only score/sector/tone metadata and preserve version 7 cache reuse.
 
 - Show live analysed-post progress and current-run AI cost in the digest. Include cached progress, pending usage and incomplete-cost labels; retain the summary after analysis stops.
 
@@ -52,11 +52,11 @@
 
 - Add Most insightful (AI) sorting with visible AI insight scores and unanalysed posts last. Clarify insight scoring in prompt version 7 and preserve all collected posts.
 
-- Add default-off digest visibility switches for low AI scores, repeated text, repeated authors and Not useful feedback, with autosave, reset and visible counts. Keep exports and stored posts complete.
+- Add default-off digest visibility switches for low AI scores, repeated text, repeated authors and Not useful feedback, with autosave, reset and visible counts. Keep stored posts complete.
 
-- Show every collected post in digests and exports, including legacy digests. Remove the ten-post selection, score/author/text exclusions and feedback hiding. Consider all posts for AI within existing limits; keep unanalysed posts visible.
+- Show every collected post in digests, including legacy digests. Remove the ten-post selection, score/author/text exclusions and feedback hiding. Consider all posts for AI within existing limits; keep unanalysed posts visible.
 
-- Add a live AI activity page with per-scan usage/cost, request attempts and errors, all shortlisted classifications, cache status, search/filtering and JSON export. Automatically estimate known model costs and mark unavailable usage explicitly; retain reported usage even when output validation fails.
+- Add a live AI activity page with per-scan usage/cost, request attempts and errors, all shortlisted classifications, cache status and search/filtering. Automatically estimate known model costs and mark unavailable usage explicitly; retain reported usage even when output validation fails.
 
 - Add an autosaved stopping mode: saved scroll point or a shared 24-hour cutoff for both feeds. Date-based scans preserve checkpoints and exclude the boundary post.
 
@@ -98,7 +98,7 @@
 
 ## 0.1.0 — 2026-09-27 (unreleased developer preview)
 
-- Original TypeScript/Vite Manifest V3 extension: bounded two-feed DOM sampling, local repository, Basic digest, feedback, export and deletion.
+- Original TypeScript/Vite Manifest V3 extension: bounded two-feed DOM sampling, local repository, Basic digest, feedback and deletion.
 - Optional direct user-key OpenRouter free-only and paid OpenAI ranking with budgets, validation, cache and fallback.
 - Best-effort scheduling with explicit focus opt-in and persisted run recovery.
 - Standalone static Vercel install/help website, using synthetic examples.

@@ -1,4 +1,4 @@
-import { button, download, el, link, notice, shell } from "./common";
+import { el, link, notice, shell } from "./common";
 import { all } from "../storage/db";
 import { active, canonical, type Run } from "../shared/types";
 import { auditTotals, type AIUsage } from "../shared/audit";
@@ -38,34 +38,7 @@ for (const [value, text] of [
 let runs: Run[] = [];
 let current: Run | undefined;
 let signature = "";
-const exportButton = button("Export scan log", () => {
-  if (!current?.aiAudit) return;
-  download(
-    `ai-activity-${current.id}.json`,
-    JSON.stringify(
-      {
-        runId: current.id,
-        startedAt: current.startedAt,
-        state: current.state,
-        provider: current.settings.provider,
-        model: current.settings.model,
-        audit: current.aiAudit,
-      },
-      null,
-      2,
-    ),
-    "application/json",
-  );
-});
-controls.append(
-  label,
-  chooser,
-  searchLabel,
-  search,
-  filterLabel,
-  filter,
-  exportButton,
-);
+controls.append(label, chooser, searchLabel, search, filterLabel, filter);
 const output = el("section");
 output.id = "auditContent";
 main.append(
@@ -87,7 +60,6 @@ function cost(usage?: AIUsage) {
 }
 function render() {
   current = runs.find((r) => r.id === chooser.value);
-  exportButton.disabled = !current?.aiAudit;
   const expanded = new Set(
     [
       ...output.querySelectorAll<HTMLDetailsElement>(

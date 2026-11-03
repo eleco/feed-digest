@@ -6,7 +6,6 @@ import {
   JEV_ORIGIN,
 } from "../ranking/jev";
 import { key } from "../storage/settings";
-import { readerSnapshot } from "../shared/online-reader";
 import { dailyThemes } from "../shared/daily-themes";
 import { topRecommendedAssets } from "../shared/recommended-assets";
 import { matchesReach, viewFollowerRatio } from "../shared/reach";
@@ -47,7 +46,7 @@ import {
   feedback,
   lastScan,
   latestScanOf,
-  savedArchive,
+  savedCollection,
   setPinned,
   transaction,
 } from "../storage/db";
@@ -157,42 +156,6 @@ aiStatus.setAttribute("aria-live", "polite");
 const analysisText = el("div", undefined, "analysis-text");
 analysisText.append(aiStatus, analysisWarning);
 analysisBar.append(analysisText, analyseToday, analyseAll);
-const exportOnline = button("Export for online reader", async () => {
-  const archive = await savedArchive();
-  const annotations: Ranked[] = [];
-  for (const run of [...archive.runs].sort(
-    (a, b) => a.startedAt - b.startedAt,
-  )) {
-    annotations.push(
-      ...(archive.digests
-        .find((digest) => digest.id === run.id)
-        ?.items.filter((item) => item.mode === "ai") ?? []),
-    );
-    annotations.push(
-      ...(run.aiAudit?.posts.flatMap((post) =>
-        post.result ? [post.result] : [],
-      ) ?? []),
-    );
-  }
-  const snapshot = readerSnapshot(archive.posts, annotations);
-  const stream = new Blob([JSON.stringify(snapshot)])
-    .stream()
-    .pipeThrough(new CompressionStream("gzip"));
-  const blob = await new Response(stream).blob();
-  if (blob.size > 4_000_000)
-    throw Error(
-      "This collection is too large for the online reader (4 MB compressed maximum).",
-    );
-  const url = URL.createObjectURL(blob);
-  const download = document.createElement("a");
-  download.href = url;
-  download.download = "x-feed-digest-reader.json.gz";
-  download.click();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-  notice(
-    `Exported ${snapshot.posts.length} saved posts. Upload the file on your online reader.`,
-  );
-});
 const aiProgressPanel = el("section", undefined, "panel ai-progress");
 aiProgressPanel.hidden = true;
 aiProgressPanel.setAttribute("aria-label", "AI analysis progress");
@@ -589,7 +552,6 @@ sortLabel.textContent = "Sort";
 sortSelect.setAttribute("aria-label", "Sort posts");
 const historyDetails = el("details", undefined, "scan-history");
 historyDetails.append(el("summary", "Scan history"), collectionControl);
-historyDetails.append(exportOnline);
 const drawerClose = button(
   "Close filters",
   () => closeDrawer(),
@@ -1457,7 +1419,7 @@ async function refreshNow(force: boolean) {
 }
 async function load() {
   await updateJevSetup();
-  const archive = await savedArchive();
+  const archive = await savedCollection();
   const history = archive.runs
     .filter((r) => !r.analysisOnly)
     .sort((a, b) => b.startedAt - a.startedAt);

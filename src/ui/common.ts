@@ -104,14 +104,6 @@ export function shell(title: string, subtitle: string) {
   app.append(header, main);
   return main;
 }
-export function download(name: string, text: string, type: string) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = el("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 /** Plain-language state of a run for status lines. */
 export function runSummary(run?: Run) {
   if (!run) return "No scans yet.";

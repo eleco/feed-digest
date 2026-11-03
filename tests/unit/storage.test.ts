@@ -6,7 +6,7 @@ import {
   get,
   put,
   prune,
-  savedArchive,
+  savedCollection,
 } from "../../src/storage/db";
 import { reserve, basicDigest } from "../../src/ranking/engine";
 import { defaults } from "../../src/shared/types";
@@ -59,7 +59,7 @@ describe("atomic storage and quotas", () => {
   });
 });
 
-it("backs up every retained scan and deduplicated post, not only the current run", async () => {
+it("reads every retained scan and deduplicated post for the saved collection", async () => {
   await put("posts", post("100"));
   await put("posts", post("200"));
   for (const id of ["older", "newer"]) {
@@ -68,7 +68,7 @@ it("backs up every retained scan and deduplicated post, not only the current run
     await put("digests", await basicDigest(r));
   }
   await put("meta", { id: "current", runId: "newer" });
-  const archive = await savedArchive();
+  const archive = await savedCollection();
   expect(archive.posts).toHaveLength(2);
   expect(archive.runs).toHaveLength(2);
   expect(archive.digests).toHaveLength(2);

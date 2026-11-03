@@ -21,7 +21,6 @@ import { scoreBasic, allPostItems } from "../../src/ranking/basic";
 import { validateOutput, makePrompt } from "../../src/ranking/prompt";
 import { isFree } from "../../src/ranking/providers";
 import { mergePost } from "../../src/storage/db";
-import { markdown } from "../../src/shared/export";
 import { card, post } from "../fixtures/data";
 function fixture(html: string) {
   document.body.innerHTML = html;
@@ -323,35 +322,6 @@ describe("hostile model output and pricing", () => {
           pricing: pricing as Record<string, string | null>,
         }),
       ).toBe(false);
-  });
-  it("escapes Markdown and only exports validated canonical URLs", () => {
-    const p = post("100", { text: "<script> & [bad](javascript:x)" });
-    const md = markdown(
-      {
-        id: "d",
-        createdAt: 0,
-        items: [
-          {
-            id: p.id,
-            score: 1,
-            takeaway: "<script> & [bad](javascript:x)",
-            reason: "*reason*",
-            flags: [],
-            mode: "basic",
-          },
-        ],
-        mode: "Basic",
-        model: "",
-        notices: [],
-        candidates: 1,
-        tokens: 0,
-        estimate: 0,
-      },
-      [p],
-    );
-    expect(md).not.toContain("<script>");
-    expect(md).toContain("&lt;script&gt;");
-    expect(md).toContain("(https://x.com/example/status/100)");
   });
   it("validates sampling limits", () => {
     expect(() =>

@@ -45,7 +45,7 @@ Current status: **blocked — no authorized logged-in X test session or provider
 1. Confirm Scan settings explains all three limits and has no daily scheduling, local-time or Save preferences controls. Edit text, limits and toggles; wait for Changes saved, reopen Settings and verify persistence. Invalid limits should display an error and preserve the last saved value.
 2. Change a preference with a legacy daily schedule configured: daily/allowFocus should become false and the daily alarm should be cleared.
 3. Start a scan manually and confirm the configured limits apply separately to each feed.
-4. Give useful/not-useful feedback, reset it, pin/unpin. Exclusions and feedback must take effect; exports should preserve links and escaped text. Copy AI prompt needs no key and contains a bounded selection.
+4. Give useful/not-useful feedback, reset it, pin/unpin. Feedback must take effect; post text must remain inert and original links must stay usable.
 5. Seed old synthetic records to test retention, 5,000-post cap, pinned exemptions and reference cleanup.
 6. Delete all data: confirm IndexedDB stores, keys, settings, cache, usage, alarms and optional provider permissions are cleared. Previously downloaded files and provider-held data cannot be retracted.
 
@@ -54,7 +54,7 @@ Current status: **blocked — no authorized logged-in X test session or provider
 - Replace license owner placeholder and add private security-reporting contact.
 - Review permissions, provider/X terms, and platform-policy compatibility.
 - Record real supported browser/OS/provider combinations, not fixture equivalents.
-- Keep real data/profiles/exports out of source, CI and release archives.
+- Keep real data/profiles out of source, CI and release archives.
 - Build ZIP from the documented command; inspect contents. Deploy only `site-dist/` to Vercel when separately authorized. Publication remains a separate action.
 
 ## Feed checkpoints

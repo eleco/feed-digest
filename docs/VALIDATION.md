@@ -8,22 +8,22 @@
 
 ## Commands and results
 
-| Command                                                                          | Result                                                                                |
-| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `npm ci --cache /private/tmp/x-feed-digest-npm-cache --ignore-scripts --offline` | Clean lockfile install succeeded; 135 packages; audit reported 0 vulnerabilities      |
-| `npm run typecheck`                                                              | Passed                                                                                |
-| `npm test`                                                                       | 45 tests passed across 3 files                                                        |
-| `npm run build`                                                                  | Installable MV3 build created in `dist/`                                              |
-| `npm run build:site`                                                             | Static Vercel output created in `site-dist/`                                          |
-| `npm run test:browser`                                                           | 19 browser cases passed across full/targeted runs; see Claude update                  |
-| `npm run release`                                                                | ZIP created; 34 entries, 345,020 bytes                                                 |
-| Release archive SHA-256                                                | `580ffb5a0f5fbee6ef1e2f9e0cf65e569298ec14f723a350a7015d8bfc701c32` |
+| Command                                                                          | Result                                                                           |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `npm ci --cache /private/tmp/x-feed-digest-npm-cache --ignore-scripts --offline` | Clean lockfile install succeeded; 135 packages; audit reported 0 vulnerabilities |
+| `npm run typecheck`                                                              | Passed                                                                           |
+| `npm test`                                                                       | 45 tests passed across 3 files                                                   |
+| `npm run build`                                                                  | Installable MV3 build created in `dist/`                                         |
+| `npm run build:site`                                                             | Static Vercel output created in `site-dist/`                                     |
+| `npm run test:browser`                                                           | 19 browser cases passed across full/targeted runs; see Claude update             |
+| `npm run release`                                                                | ZIP created; 34 entries, 345,020 bytes                                           |
+| Release archive SHA-256                                                          | `580ffb5a0f5fbee6ef1e2f9e0cf65e569298ec14f723a350a7015d8bfc701c32`               |
 
 The local sandbox blocks Chromium process startup and listening on localhost; browser fixture commands ran with approved process/network access. All application HTTPS requests in these tests were intercepted with synthetic responses or aborted. Dependency installation used network access; generation tests spent no credits. CI is prepared but has not run remotely.
 
 ## Coverage
 
-Unit tests cover outer-vs-quoted post identity, missing data, malformed URLs/cards, markers, stale feed transitions, unsupported labels, challenges, provenance merging, deterministic Basic ranking, feedback/exclusions, author/source diversity, hostile model JSON, free-price validation, Markdown escaping, local alarm calculation, atomic quotas/spend reservations, retention/references, deletion, missing session keys, 429/changed-price fallback, partial valid AI batches, late-response deletion guards, cache reuse and Basic network isolation.
+Unit tests cover outer-vs-quoted post identity, missing data, malformed URLs/cards, markers, stale feed transitions, unsupported labels, challenges, provenance merging, deterministic Basic ranking, feedback/exclusions, author/source diversity, hostile model JSON, free-price validation, local alarm calculation, atomic quotas/spend reservations, retention/references, deletion, missing session keys, 429/changed-price fallback, partial valid AI batches, late-response deletion guards, cache reuse and Basic network isolation.
 
 Browser fixtures cover settings/popup/digest loading, two-feed collection and deduplication, outgoing-card rejection, feedback/data deletion, cancellation and double starts, unrelated-tab preservation, session-only keys/removal, clearing legacy schedules when saving preferences, HTML rendered as text, partial feeds, expired leases/late messages, content-script key isolation, account-change blocking, direct mocked provider calls, worker restart, scroll caps, browser-session ownership and responsive website filtering/layout. The full scan fixture records 2 Following observations, 2 For You observations and 3 distinct posts. These are synthetic counts, not live X counts.
 
@@ -127,21 +127,21 @@ Added saved-checkpoint (default) and last-24-hours stopping modes. The date cuto
 
 Added a live extension page, navigation/popup links and per-run audit snapshots. Records every shortlisted post with bounded text/quote, classifications, score/reason/takeaway, local-cache status and inclusion at digest completion. Request attempts record timing, status/errors, available input/output usage and automatically estimated or reported USD costs. Missing usage stays unknown; failed output validation retains reported tokens. Retries and interrupted attempts remain distinct, including when ranking resumes after a reload. No raw provider response or API key is persisted in the audit. Existing run pruning and Delete all data cover logs.
 
-Typecheck, 51 unit tests, release build and all 27 browser tests passed (1.7 minutes). Unit checks include usage/cost calculation, provider cache reads, unknown usage, failed validation, retries, resumed request history, cache reuse and deletion races. The browser test exercises live pending/success transitions, cost display, an analysed post omitted from the digest, inert hostile takeaway text, search/filtering, JSON export without the synthetic API key, second-scan local-cache reuse and reload persistence. Visually inspected the desktop activity screenshot. All provider traffic was mocked; no real account credentials, API charges or authenticated X requests were used.
+Typecheck, 51 unit tests, release build and all 27 browser tests passed (1.7 minutes). Unit checks include usage/cost calculation, provider cache reads, unknown usage, failed validation, retries, resumed request history, cache reuse and deletion races. The browser test exercises live pending/success transitions, cost display, an analysed post omitted from the digest, inert hostile takeaway text, search/filtering, second-scan local-cache reuse and reload persistence. Visually inspected the desktop activity screenshot. All provider traffic was mocked; no real account credentials, API charges or authenticated X requests were used.
 
 Standard rates were verified against official Claude Haiku 4.5 pricing and OpenAI GPT-4.1 mini/nano model pages linked in README and the activity page. Costs remain estimates unless reported by the provider; bundled rates are dated 27 September 2026. Unknown charges are not represented as zero. Detailed logs only apply to new AI scans.
 
 ## All collected posts in the digest
 
-Removed the ten-post selection, score floor, author caps, text-similarity filtering and negative-feedback hiding. Every collected ID gets a digest entry, including low-score, short, repeated-text and unanalysed posts. Existing digests hydrate missing entries from still-stored posts and audit classifications on display/export. Optional user-controlled display filters remain. AI considers all collected posts within existing request/token/time limits and falls back to source excerpts without hiding posts. Prompt version 6 requests a classification for every supplied item.
+Removed the ten-post selection, score floor, author caps, text-similarity filtering and negative-feedback hiding. Every collected ID gets a digest entry, including low-score, short, repeated-text and unanalysed posts. Existing digests hydrate missing entries from still-stored posts and audit classifications on display. Optional user-controlled display filters remain. AI considers all collected posts within existing request/token/time limits and falls back to source excerpts without hiding posts. Prompt version 6 requests a classification for every supplied item.
 
-Typecheck, 51 unit tests, extension release and site build passed. Five targeted browser tests passed (25.3 seconds): scan/feedback/deletion, sorting, Claude classifications, live AI activity/cache reuse, and a new 15-post test with identical text and a short post. The latter confirms all 15 remain after negative feedback, reload of an older ten-item digest, and JSON export. No live account or provider traffic was used.
+Typecheck, 51 unit tests, extension release and site build passed. Five targeted browser tests passed (25.3 seconds): scan/feedback/deletion, sorting, Claude classifications, live AI activity/cache reuse, and a new 15-post test with identical text and a short post. The latter confirms all 15 remain after negative feedback and reload of an older ten-item digest. No live account or provider traffic was used.
 
 ## Optional digest visibility filters
 
-Added independent default-off switches for low AI scores (below 30), repeated normalised text, a two-post author limit and Not useful feedback. Filters apply to the current sorted/feed/category view and never alter stored digest items or exports. Preferences autosave; reset clears the four switches. A live count reports visible versus collected posts, and feedback changes refresh the view.
+Added independent default-off switches for low AI scores (below 30), repeated normalised text, a two-post author limit and Not useful feedback. Filters apply to the current sorted/feed/category view and never alter stored digest items. Preferences autosave; reset clears the four switches. A live count reports visible versus collected posts, and feedback changes refresh the view.
 
-Typecheck, 54 unit tests, release build and three targeted browser tests passed (12.5 seconds). Unit coverage verifies independent/combined filters, invalid saved values, ordering, empty-text posts and Basic posts without AI scores. Browser coverage verifies each switch, author-filter persistence on reload, reset, immediate feedback hiding, full export while filtered, existing sorting and data deletion.
+Typecheck, 54 unit tests, release build and three targeted browser tests passed (12.5 seconds). Unit coverage verifies independent/combined filters, invalid saved values, ordering, empty-text posts and Basic posts without AI scores. Browser coverage verifies each switch, author-filter persistence on reload, reset, immediate feedback hiding, existing sorting and data deletion.
 
 ## AI insight sorting
 
@@ -187,9 +187,9 @@ Hide posts from this view now uses a native details/summary disclosure, collapse
 
 ## Original posts and compact AI metadata — 28 September 2026
 
-Digest cards and Markdown exports now show the original collected text, quotes and links, without AI prose, insight scores, sector/tone badges or generated flags. Scores and labels remain stored for sorting/filtering and audit inspection. Prompt version 8 requests only id, score, sectors and tones. Validators accept compact results and legacy cached prose; version 7 cache keys remain compatible to avoid re-analysis charges. Empty legacy prose fields maintain storage compatibility. Actual token savings depend on the provider's response; no live cost benchmark was run.
+Digest cards now show the original collected text, quotes and links, without AI prose, insight scores, sector/tone badges or generated flags. Scores and labels remain stored for sorting/filtering and audit inspection. Prompt version 8 requests only id, score, sectors and tones. Validators accept compact results and legacy cached prose; version 7 cache keys remain compatible to avoid re-analysis charges. Empty legacy prose fields maintain storage compatibility. Actual token savings depend on the provider's response; no live cost benchmark was run.
 
-Typecheck, extension release and 63 unit tests passed. Five targeted browser tests passed (23.9 seconds): hostile source text/Markdown escaping, insight sorting without displayed scores, compact Claude classifications with category filters and links, live activity/cache reuse, and full-post display/visibility filters. New unit coverage verifies metadata-only output and version 7 cache reuse without generation. All provider traffic was mocked.
+Typecheck, extension release and 63 unit tests passed. Five targeted browser tests passed (23.9 seconds): hostile source text/insight sorting without displayed scores, compact Claude classifications with category filters and links, live activity/cache reuse, and full-post display/visibility filters. New unit coverage verifies metadata-only output and version 7 cache reuse without generation. All provider traffic was mocked.
 
 ## Author browsing — 28 September 2026
 
@@ -203,15 +203,15 @@ Typecheck, release and 64 unit tests passed. Three targeted browser tests passed
 
 ## Finance-only controls and persistent blacklist — 28 September 2026
 
-Buy/sell and asset filters show only for Finance and reset on leaving that sector. The visibility disclosure includes a textarea of literal words/phrases, one per line, applied case-insensitively to post/quoted text before author and duplicate limits. Serialized local-storage autosaves persist across sessions. Reset clears the blacklist; exports still include hidden posts.
+Buy/sell and asset filters show only for Finance and reset on leaving that sector. The visibility disclosure includes a textarea of literal words/phrases, one per line, applied case-insensitively to post/quoted text before author and duplicate limits. Serialized local-storage autosaves persist across sessions. Reset clears the blacklist; hidden posts remain stored.
 
 Typecheck, 65 unit tests and release passed. Two browser tests passed (10.9 seconds), covering Finance visibility/reset, buy/sell matching, blacklist filtering, saved local storage, reload persistence, clearing and existing visibility filters. No live provider requests.
 
-## Saved collections and complete backup — 28 September 2026
+## Saved collections — 28 September 2026
 
-The digest defaults to all saved posts, deduplicated by stored post ID, with latest-run and dated history views. Saved AI annotations remain available across later Basic collections. The digest analysis action uses the selected collection, including all archived posts when All saved posts is selected; popup analysis continues to use the latest run. Added a consistent IndexedDB snapshot export of posts/runs/digests/feedback plus allowed reading preferences as a readable JSON backup, excluding API-key storage. Existing 30-day/5,000-post retention remains. No backup import or automatic filesystem syncing was added.
+The digest defaults to all saved posts, deduplicated by stored post ID, with latest-run and dated history views. Saved AI annotations remain available across later Basic collections. The digest analysis action uses the selected collection, including all archived posts when All saved posts is selected; popup analysis continues to use the latest run. Existing 30-day/5,000-post retention remains.
 
-Typecheck, 66 unit tests and extension release passed. The full 29-case browser run passed 28 cases and exposed a timing race in the existing expired-lease fixture. Replaced its live-start mutation with a seeded expired run and isolated its stale-message tab; the final targeted recovery test passed (1.7 seconds). The saved-history test was strengthened to use distinct posts in successive scans and passed on a targeted run (2.3 seconds), covering combined/latest/older views, retained AI metadata, reload and full backup contents. All 29 cases therefore have passing results across runs; the initial full run was not clean. No live X or provider requests.
+Typecheck, 66 unit tests and extension release passed. The full 29-case browser run passed 28 cases and exposed a timing race in the existing expired-lease fixture. Replaced its live-start mutation with a seeded expired run and isolated its stale-message tab; the final targeted recovery test passed (1.7 seconds). The saved-history test was strengthened to use distinct posts in successive scans and passed on a targeted run (2.3 seconds), covering combined/latest/older views, retained AI metadata, reload and complete saved collections. All 29 cases therefore have passing results across runs; the initial full run was not clean. No live X or provider requests.
 
 ## Publication-date filtering — 28 September 2026
 

@@ -53,9 +53,7 @@ export function followerLookup(root: Document, signal: AbortSignal) {
     }
     if (spent >= 12000 || Date.now() >= deadline) return null;
     const anchor = [
-      ...root.querySelectorAll<HTMLAnchorElement>(
-        `${selectors.card} ${selectors.name} a[href]`,
-      ),
+      ...root.querySelectorAll<HTMLAnchorElement>(`${selectors.card} a[href]`),
     ].find((link) => {
       const url = followerUrl(link);
       return (

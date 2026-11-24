@@ -65,6 +65,15 @@ export function brand() {
     el("span", undefined, "brand-mark"),
     document.createTextNode("X Feed Digest"),
   );
+  // Version plus build time, so it is clear which build Chrome has loaded.
+  const manifest = chrome.runtime.getManifest();
+  const version = el(
+    "span",
+    "v" + (manifest.version_name ?? manifest.version),
+    "brand-version",
+  );
+  version.title = `Loaded build: ${version.textContent}`;
+  logo.append(version);
   return logo;
 }
 /** Short date for posts: time only today, otherwise the day and time. */

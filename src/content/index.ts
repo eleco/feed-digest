@@ -1,7 +1,10 @@
 import { isHome, type Feed, type Settings, type Post } from "../shared/types";
 import {
   account,
+  accountClues,
   barrier,
+  feedClues,
+  feedRoot,
   feedTab,
   selectors,
   selected,
@@ -27,7 +30,7 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
     // itself rather than any tab-like element. A missing tab only makes that
     // one feed unavailable.
     const ready = () =>
-      !!document.querySelector(selectors.primary) &&
+      !!feedRoot(document) &&
       (!!feedTab(document, "following") || !!feedTab(document, "for-you"));
     await waitFor(
       () => !!barrier(document, location.href) || ready(),
@@ -38,13 +41,21 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
     });
     const blocked = barrier(document, location.href);
     if (blocked) throw Error(blocked);
-    if (!ready())
+    if (!ready()) {
+      // Say what X did render, so a changed layout can be diagnosed.
+      const tabs = [...document.querySelectorAll(selectors.tab)]
+        .map((t) => (t.textContent ?? "").trim().slice(0, 20))
+        .filter(Boolean)
+        .slice(0, 5);
       throw Error(
-        `Unsupported X home layout: neither the Following nor the For you tab appeared (window ${innerWidth}×${innerHeight}px)`,
+        `Unsupported X home layout: neither the Following nor the For you tab appeared. Feed column ${document.querySelector(selectors.primary) ? "found" : feedRoot(document) ? "missing (main region found)" : "missing"}; tabs: ${tabs.length ? tabs.join(", ") : "none"}; window ${outerWidth}×${outerHeight}px, page ${innerWidth}px wide`,
       );
+    }
     identity = account(document);
     if (!identity)
-      throw Error("Cannot verify the signed-in account in this layout");
+      throw Error(
+        `Cannot verify the signed-in account in this layout (${accountClues(document)}; page ${innerWidth}px wide)`,
+      );
     await send({ op: "identity", runId, account: identity });
     for (const feed of ["following", "for-you"] as Feed[]) {
       signal.throwIfAborted();
@@ -76,7 +87,12 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
             !!barrier(document, location.href),
           signal,
           10000,
-        );
+        ).catch((error) => {
+          if (signal.aborted) throw error;
+          throw Error(
+            `No posts appeared: ${feedClues(document, feed)}`.slice(0, 290),
+          );
+        });
         // Cards are in feed order. A feed ends after OLD_RUN old originals in a
         // row. Reposts show the original's date, not when they were reposted,
         // so they never count as old, and ads are ignored.
@@ -124,9 +140,9 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
         };
         const captureAll = () =>
           capture([
-            ...document
-              .querySelector(selectors.primary)!
-              .querySelectorAll(selectors.card),
+            ...(feedRoot(document) ?? document).querySelectorAll(
+              selectors.card,
+            ),
           ]);
         observer = new MutationObserver((records) => {
           cachedCards.invalidate(records);
@@ -140,16 +156,13 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
                 capture(removed);
               }
         });
-        observer.observe(
-          document.querySelector(selectors.primary) ?? document.body,
-          {
-            childList: true,
-            subtree: true,
-            characterData: true,
-            attributes: true,
-            attributeFilter: extractionAttributes,
-          },
-        );
+        observer.observe(feedRoot(document) ?? document.body, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true,
+          attributeFilter: extractionAttributes,
+        });
         const flush = async () => {
           while (pending.size) {
             const posts = [...pending.values()].slice(0, 10);

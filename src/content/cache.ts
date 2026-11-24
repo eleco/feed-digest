@@ -10,6 +10,7 @@ export const extractionAttributes = [
   "title",
   "data-testid",
   "role",
+  "lang",
 ];
 
 // Scoped to one feed in one scan. Weak keys release virtualized cards naturally.

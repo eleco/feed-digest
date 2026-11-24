@@ -59,3 +59,13 @@ export const card = (
   extra = "",
 ) =>
   `<article data-testid="tweet"><div data-testid="User-Name"><a href="/example"><span>Example Author</span></a><a href="/example/status/${id}"><time datetime="2026-09-20T10:00:00Z"></time></a></div><div data-testid="tweetText">${text}</div>${extra}</article>`;
+
+// A post as some X builds render it: no test ids, no <time>; modelled on a
+// live outline. The ID encodes 2026-11-24T14:20:26.290Z.
+export const plainCard = (
+  id = "2125233081846223231",
+  text = "A synthetic post rendered without test ids.",
+  extra = "",
+  group = "78 replies, 96 reposts, 3153 likes, 161 bookmarks, 266581 views",
+) =>
+  `<div role="link"><article>${extra}<a href="/example"><img alt=""></a><a href="/example"><div>Example Author</div></a><a href="/example"><span>@example</span></a><a href="/example/status/${id}">5h</a><button aria-label="More">…</button><div lang="en"><span>${text}</span></div>${group ? `<div role="group" aria-label="${group}"><a aria-label="Reply" href="/compose/post?in_reply_to=${id}"><span>78</span></a><a aria-label="View count" href="/example/status/${id}/analytics"><span>266K</span></a></div>` : ""}</article></div>`;

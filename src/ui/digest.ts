@@ -1149,7 +1149,7 @@ function render() {
         active(run)
           ? "Keep the scan tab open. Saved posts will appear here when collection finishes."
           : scanFailed
-            ? `${runSummary(run)} ${/layout/i.test(run?.reason ?? "") ? "Make sure the X window is wide enough to show the Following and For you tabs, then scan again." : "Check that you are signed in to X in this browser, then scan again."}`
+            ? `${runSummary(run)} ${/signed-in account/i.test(run?.reason ?? "") ? "X did not show which account is signed in. Open x.com, check you are signed in, then scan again." : /layout/i.test(run?.reason ?? "") ? "Make sure the X window is wide enough to show the Following and For you tabs, then scan again." : /sign in|signed in/i.test(run?.reason ?? "") ? "Check that you are signed in to X in this browser, then scan again." : "Scan again. If it keeps happening, the details above show what X displayed."}`
             : digest?.items.length
               ? "Try All dates, or change an author, category or display filter."
               : "Start a scan to create your first digest, or choose another feed filter.",

@@ -22,6 +22,7 @@ import {
 import { key, settings, secureStorage } from "../storage/settings";
 import { basicDigest } from "../ranking/engine";
 import { HIDE_FEED_IMAGES_CSS } from "../content/adapter";
+import { digestFits, scanWindowWidth } from "../shared/scan-layout";
 const ready = secureStorage();
 async function browserSession() {
   const stored = (await chrome.storage.session.get("browserSession"))
@@ -116,10 +117,6 @@ function screenArea(raw: unknown): Area | undefined {
   const area = a as Area;
   return area.width > 0 && area.height > 0 ? area : undefined;
 }
-// X switches to a narrow layout without the feed column below roughly this
-// width, so the scan window is never made smaller.
-const SCAN_MIN_WIDTH = 1024;
-const DIGEST_MIN_WIDTH = 420;
 // X may stop loading posts in a hidden tab, so the scan tab cannot share a
 // window with the live digest. Open both as new windows side by side across
 // the screen; existing windows are untouched.
@@ -132,9 +129,10 @@ async function openScanWindows(screen?: Area) {
     top = base.top ?? 0,
     width = base.width ?? 1280,
     height = base.height ?? 800;
-  const scanWidth = Math.max(SCAN_MIN_WIDTH, Math.round(width * 0.6));
+  // X's zoom is unknown until it loads; fitScanWindow widens this if needed.
+  const scanWidth = scanWindowWidth(width);
   // Without room for both, the digest opens behind the scan window instead.
-  const split = width - scanWidth >= DIGEST_MIN_WIDTH;
+  const split = digestFits(width, scanWidth);
   // Chrome rejects bounds mostly off-screen (e.g. after a display change);
   // fall back to its default placement rather than failing the scan.
   const open = (
@@ -161,7 +159,7 @@ async function openScanWindows(screen?: Area) {
   const tabId = scan?.tabs?.[0]?.id;
   if (monitorTabId === undefined || tabId === undefined)
     throw Error("Could not open the scan windows");
-  return { monitorTabId, tabId };
+  return { monitorTabId, tabId, area: { left, top, width, height } };
 }
 async function start(screen?: Area) {
   await ready;
@@ -221,6 +219,7 @@ async function start(screen?: Area) {
     const opened = await openScanWindows(screen);
     r.monitorTabId = opened.monitorTabId;
     r.tabId = opened.tabId;
+    r.screen = opened.area;
     await put("runs", r);
     await chrome.action.setBadgeText({ text: "…" });
     const navigating = await chrome.tabs.update(opened.tabId, {
@@ -233,6 +232,37 @@ async function start(screen?: Area) {
     await finish(r, "blocked", "Could not open the scan tab");
   }
   return r.id;
+}
+// Once X has loaded, its zoom is known (zoom is per site). Widen the scan
+// window so X gets its full layout (see scan-layout.ts), within the screen, and
+// keep the digest beside it only if it still fits.
+async function fitScanWindow(r: Run, tabId: number) {
+  const area = r.screen;
+  if (!area) return;
+  try {
+    const zoom = await chrome.tabs.getZoom(tabId);
+    const tab = await chrome.tabs.get(tabId);
+    const win = await chrome.windows.get(tab.windowId);
+    const needed = scanWindowWidth(area.width, zoom);
+    if ((win.width ?? 0) >= needed) return;
+    await chrome.windows.update(tab.windowId, {
+      state: "normal",
+      left: area.left,
+      top: area.top,
+      width: needed,
+      height: area.height,
+    });
+    if (r.monitorTabId === undefined || !digestFits(area.width, needed)) return;
+    const monitor = await chrome.tabs.get(r.monitorTabId);
+    await chrome.windows.update(monitor.windowId, {
+      left: area.left + needed,
+      top: area.top,
+      width: area.width - needed,
+      height: area.height,
+    });
+  } catch {
+    // Sizing is best effort; the scan still runs at the current size.
+  }
 }
 async function launch(tabId: number) {
   const r = await current();
@@ -256,6 +286,7 @@ async function launch(tabId: number) {
   }
   r.phase = "Reading feeds";
   await put("runs", r);
+  await fitScanWindow(r, tabId);
   try {
     if (r.settings.hideImages)
       await chrome.scripting.insertCSS({

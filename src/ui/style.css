@@ -76,6 +76,7 @@ header {
   gap: 20px;
 }
 .brand {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -84,6 +85,16 @@ header {
   text-decoration: none;
   letter-spacing: -0.3px;
   white-space: nowrap;
+}
+.brand-version {
+  /* Shrinks with an ellipsis rather than widening narrow headers. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
 }
 .brand-mark {
   width: 18px;

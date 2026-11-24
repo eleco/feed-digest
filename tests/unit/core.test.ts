@@ -7,6 +7,7 @@ import {
   transitionSafe,
   engagement,
   feedTab,
+  feedRoot,
   barrier,
   account,
 } from "../../src/content/adapter";
@@ -21,7 +22,7 @@ import { scoreBasic, allPostItems } from "../../src/ranking/basic";
 import { validateOutput, makePrompt } from "../../src/ranking/prompt";
 import { isFree } from "../../src/ranking/providers";
 import { mergePost } from "../../src/storage/db";
-import { card, post } from "../fixtures/data";
+import { card, plainCard, post } from "../fixtures/data";
 function fixture(html: string) {
   document.body.innerHTML = html;
   return document.querySelector("article")!;
@@ -172,6 +173,19 @@ describe("DOM identity and provenance", () => {
     old[0].remove();
     document.body.insertAdjacentHTML("beforeend", card("200"));
     expect(transitionSafe(old, document, "for-you")).toBe(true);
+  });
+  it("finds doubled tab labels and falls back to the main region", () => {
+    // Seen on live X in a zoomed window: no primaryColumn test id, and each
+    // tab renders its label twice.
+    fixture(
+      '<main role="main"><div role="tablist"><div role="tab" aria-selected="true"><span>For you</span><span aria-hidden="true">For you</span></div><div role="tab" aria-selected="false"><span>Following</span><span aria-hidden="true">Following</span></div></div></main>',
+    );
+    expect(feedRoot(document)?.tagName).toBe("MAIN");
+    expect(feedTab(document, "following")?.textContent).toBe(
+      "FollowingFollowing",
+    );
+    expect(selected(document, "for-you")).toBe(true);
+    expect(selected(document, "following")).toBe(false);
   });
   it("does not guess localized tabs by index", () => {
     fixture(
@@ -474,6 +488,63 @@ it("validates buy/sell metadata without inventing assets and distinguishes unche
   ).toThrow("Invalid result schema");
 });
 
+describe("posts without test ids", () => {
+  it("reads author, text, time from the ID, exact counts and links", () => {
+    const root = fixture(
+      plainCard(
+        "2125233081846223231",
+        'Read <a href="https://t.co/abc" title="https://example.com/report">example.com/report</a>',
+      ),
+    );
+    const p = extract(root, "following", "run")!;
+    expect(p).toMatchObject({
+      id: "2125233081846223231",
+      handle: "example",
+      author: "Example Author",
+      text: "Read example.com/report",
+      publishedAt: Date.parse("2026-11-24T14:20:26.290Z"),
+      likes: 3153,
+      comments: 78,
+      views: 266581,
+      reposter: null,
+      quotedText: null,
+      mediaOnly: false,
+    });
+    expect(p.links).toEqual([
+      { url: "https://example.com/report", source: "post" },
+    ]);
+    expect(validatePost(p)).toBe(true);
+  });
+  it("detects reposts and quoted posts, and ignores the nested article", () => {
+    // Live pages set <html lang>; only [lang] blocks inside the card are text.
+    document.documentElement.lang = "en";
+    const quote =
+      '<div role="link"><article><a href="/quoted">Quoted</a><a href="/quoted/status/2125233081846223000">1h</a><div lang="en">The quoted words</div></article></div>';
+    document.body.innerHTML = plainCard(
+      "2125233081846223231",
+      "Outer words",
+      "<span>Someone reposted</span>",
+    ).replace("</article></div>", quote + "</article></div>");
+    const [outer, inner] = [...document.querySelectorAll("article")];
+    const p = extract(outer, "for-you", "run")!;
+    expect(p).toMatchObject({
+      id: "2125233081846223231",
+      text: "Outer words",
+      quotedText: "The quoted words",
+      reposter: "Someone",
+    });
+    expect(extract(inner, "for-you", "run")).toBeNull();
+  });
+  it("treats missing counts as zero but missing views as unknown", () => {
+    const p = extract(
+      fixture(plainCard("2125233081846223231", "Quiet post", "", "Reply")),
+      "following",
+      "run",
+    )!;
+    expect(p).toMatchObject({ likes: 0, comments: 0, views: null });
+  });
+});
+
 describe("signed-in account", () => {
   it("reads the handle from the full side menu, the collapsed avatar or the profile link", () => {
     document.body.innerHTML =
@@ -487,6 +558,18 @@ describe("signed-in account", () => {
     expect(account(document)).toBe("@profile_link");
     document.body.innerHTML =
       '<a data-testid="AppTabBar_Profile_Link" href="/someone/status/1">Profile</a><div data-testid="UserAvatar-Container-author"></div>';
+    expect(account(document)).toBeNull();
+  });
+  it("falls back to the side menu avatar or the Home composer avatar", () => {
+    document.body.innerHTML =
+      '<header role="banner"><div data-testid="UserAvatar-Container-Banner_User"></div></header>';
+    expect(account(document)).toBe("@banner_user");
+    document.body.innerHTML =
+      '<main><div><div><div data-testid="UserAvatar-Container-Composer_User"></div></div><div><div data-testid="tweetTextarea_0"></div></div></div><article data-testid="tweet"><div data-testid="UserAvatar-Container-author"></div></article></main>';
+    expect(account(document)).toBe("@composer_user");
+    // A post author's avatar near the composer is never the account.
+    document.body.innerHTML =
+      '<main><div data-testid="tweetTextarea_0"></div><article data-testid="tweet"><div data-testid="UserAvatar-Container-author"></div></article></main>';
     expect(account(document)).toBeNull();
   });
 });

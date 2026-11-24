@@ -64,6 +64,8 @@ export interface Run {
   postIds: string[];
   /** Older runs only; superseded by newestCollected. */
   firstCollected?: Partial<Record<Feed, string>>;
+  /** Screen area the scan's windows are laid out in. */
+  screen?: { left: number; top: number; width: number; height: number };
   newestCollected?: Partial<
     Record<Feed, { postId: string; publishedAt: number }>
   >;

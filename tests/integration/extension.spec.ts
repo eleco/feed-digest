@@ -9,7 +9,12 @@ import {
 import { mkdtemp, rm, cp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
-import { card, post as fixturePost, run as fixtureRun } from "../fixtures/data";
+import {
+  card,
+  plainCard,
+  post as fixturePost,
+  run as fixtureRun,
+} from "../fixtures/data";
 let context: BrowserContext, profile: string, base: string;
 let fixtureHtml: string;
 let externalRequests: string[];
@@ -129,6 +134,10 @@ test("loads settings and popup; scans both feeds, deduplicates, gives feedback a
 
   const popup = await context.newPage();
   await popup.goto(base + "/popup.html");
+  // The header shows the loaded build's version and build time.
+  await expect(popup.locator(".brand-version")).toHaveText(
+    /^v\d+\.\d+\.\d+ \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}\)$/,
+  );
   // Stop only appears while a scan or analysis is running.
   await expect(
     popup.getByRole("button", { name: "Stop", exact: true }),
@@ -2727,4 +2736,59 @@ test("saved posts and AI activity have no export controls", async () => {
   await expect(
     page.getByRole("button", { name: /export|download/i }),
   ).toHaveCount(0);
+});
+
+test("scans posts rendered without test ids, dating them from their IDs", async () => {
+  // Snowflake IDs for posts published the given number of hours ago.
+  const idAt = (hours: number) =>
+    (BigInt(Date.now() - hours * 3600000 - 1288834974657) << 22n).toString();
+  const recent = [idAt(1), idAt(2)];
+  const old = [idAt(30), idAt(31), idAt(32), idAt(33), idAt(34)];
+  const following =
+    plainCard(recent[0], "Plain following post") +
+    plainCard(
+      recent[1],
+      "Plain reposted post",
+      "<span>Someone reposted</span>",
+    ) +
+    old.map((id) => plainCard(id, "Old plain post")).join("") +
+    plainCard(idAt(3), "Below the old run");
+  const forYouId = idAt(4);
+  const forYou = plainCard(forYouId, "Plain for you post");
+  fixtureHtml =
+    fixture +
+    `<script>feeds.following=${JSON.stringify(following)};feeds['for-you']=${JSON.stringify(forYou)};</script>`;
+  const page = await context.newPage();
+  await page.goto(base + "/settings.html");
+  await page.locator("#stopMode").selectOption("last24hours");
+  await expect(page.locator("#saveStatus")).toContainText("Changes saved");
+  await page.evaluate(() => chrome.runtime.sendMessage({ op: "start" }));
+  await expect
+    .poll(
+      async () => ((await stores(page)).runs[0] as { state: string })?.state,
+      { timeout: 20000 },
+    )
+    .toBe("completed");
+  const data = await stores(page);
+  const run = data.runs[0] as {
+    postIds: string[];
+    feeds: Record<string, { reason: string }>;
+  };
+  expect(run.postIds).toEqual([recent[0], recent[1], forYouId]);
+  expect(run.feeds.following.reason).toBe("24-hour cutoff reached");
+  const saved = data.posts.find(
+    (p) => (p as { id: string }).id === recent[1],
+  ) as Post;
+  expect(saved).toMatchObject({
+    handle: "example",
+    author: "Example Author",
+    text: "Plain reposted post",
+    reposter: "Someone",
+    likes: 3153,
+    comments: 78,
+    views: 266581,
+  });
+  expect(
+    Math.abs(saved.publishedAt! - (Date.now() - 2 * 3600000)),
+  ).toBeLessThan(60000);
 });

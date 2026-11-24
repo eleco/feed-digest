@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Read posts that X renders without test ids or <time> elements, as seen on live X: the permalink gives the ID and handle, the publish time is decoded from the post ID, text comes from [lang] blocks, exact reply, like and view counts from the action bar's aria-label, and reposts and quoted posts are detected structurally. Posts with test ids are read exactly as before.
+
+- When a feed is not ready, report what X showed (tab state, post, article, text and cell counts, page visibility and width, and for a feed switch how many previous posts remain and how recently the page changed). Match post cards by their test id on any element.
+
+- Find the signed-in account in more layouts: the side menu's Profile link or avatar, and the avatar beside the Home composer (never a post author's). A failure now reports which of these X showed.
+
+- Size the scan window for X's zoom level once x.com loads, so X always gets at least 1,280 page pixels and its full layout. At 125% zoom a 1,080 px window was an 864 px page, which made X drop its feed column and double its tab labels.
+
+- Recognise X's feed tabs when their labels render twice (for example "FollowingFollowing") and fall back to the main region when the feed column has no primaryColumn test id, as seen on live X in a zoomed window.
+
+- Show the loaded version and build time (for example "v0.1.0 (2026-11-24 16:39)") beside the name on every extension page. The build stamps it into the manifest's version_name, which chrome://extensions also shows.
+
 - Fix "Unsupported X home layout" scans: scan windows are now sized from the screen, not the window the scan was started from, and are never narrower than 1,024 pixels. The scan also waits for X's feed tabs to appear instead of continuing as soon as any tab-like element renders, and a layout failure reports the window size instead of suggesting you sign in.
 
 - Watch results while scanning: the scan and a live digest now open as side-by-side windows, and the digest header shows which feed is being read and how many posts have been saved so far.

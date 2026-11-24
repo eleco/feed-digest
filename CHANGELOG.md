@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fix "Unsupported X home layout" scans: scan windows are now sized from the screen, not the window the scan was started from, and are never narrower than 1,024 pixels. The scan also waits for X's feed tabs to appear instead of continuing as soon as any tab-like element renders, and a layout failure reports the window size instead of suggesting you sign in.
+
+- Watch results while scanning: the scan and a live digest now open as side-by-side windows, and the digest header shows which feed is being read and how many posts have been saved so far.
+
+- Remove the scan time limits. Following now reads back to its boundary however long it takes, and post and scroll limits apply to For You only. The scan lease is renewed on every scroll instead of expiring after about four minutes.
+
+- The Following checkpoint is now the newest original post (never a repost or ad) and is matched by date as well as ID. A repost of the checkpoint post no longer stops a scan early, and the checkpoint advances only after a scan reaches it, so gaps are filled by the next scan instead of lost. This replaces the earlier always-advance behaviour.
+
+- 24-hour mode counts old posts only when they are consecutive in the feed, ignores reposts and ads, and stops after five instead of three. Previously, old posts spread across the visible page added up and ended the feed early, and recent reposts of older posts were dropped.
+
 - New scans keep All saved posts selected so new posts appear alongside earlier scans; individual scan views remain available in Scan history.
 
 - AI analysis retries rate limits, server errors, timeouts and network drops up to three times, honouring Retry-After. A batch that still fails or returns unusable output is skipped and later batches continue; three failed batches in a row, or a rejected key, model or price, stop the run.

@@ -2,6 +2,7 @@ import { isHome, type Feed, type Settings, type Post } from "../shared/types";
 import {
   account,
   barrier,
+  feedTab,
   selectors,
   selected,
   switchFeed,
@@ -10,35 +11,43 @@ import {
 import { followerLookup } from "./followers";
 import { extractionAttributes, extractionCache } from "./cache";
 let controller: AbortController | undefined;
+// Consecutive dated originals at or below the boundary that end a feed. Reply
+// threads show up to two older parents above a new reply, so three is too few.
+const OLD_RUN = 5;
 const send = async (message: unknown) => {
   const response = await chrome.runtime.sendMessage(message);
   if (!response?.ok) throw Error(response?.error ?? "Scan no longer active");
   return response;
 };
 async function scan(runId: string, s: Settings, signal: AbortSignal) {
-  const started = Date.now();
   const followers = followerLookup(document, signal);
   let identity: string | null = null;
   try {
+    // X renders its shell before the feed column, so wait for a feed tab
+    // itself rather than any tab-like element. A missing tab only makes that
+    // one feed unavailable.
+    const ready = () =>
+      !!document.querySelector(selectors.primary) &&
+      (!!feedTab(document, "following") || !!feedTab(document, "for-you"));
     await waitFor(
-      () =>
-        !!barrier(document, location.href) ||
-        !!document.querySelector(selectors.tab),
+      () => !!barrier(document, location.href) || ready(),
       signal,
-      15000,
-    );
+      20000,
+    ).catch((error) => {
+      if (signal.aborted) throw error;
+    });
     const blocked = barrier(document, location.href);
     if (blocked) throw Error(blocked);
-    if (!document.querySelector(selectors.primary))
-      throw Error("Unsupported X home layout");
+    if (!ready())
+      throw Error(
+        `Unsupported X home layout: neither the Following nor the For you tab appeared (window ${innerWidth}×${innerHeight}px)`,
+      );
     identity = account(document);
     if (!identity)
       throw Error("Cannot verify the signed-in account in this layout");
     await send({ op: "identity", runId, account: identity });
     for (const feed of ["following", "for-you"] as Feed[]) {
       signal.throwIfAborted();
-      if (Date.now() - started > 205000)
-        throw Error("Total collection deadline reached");
       const seen = new Set<string>();
       const cachedCards = extractionCache(feed, runId);
       let skipped = 0,
@@ -54,12 +63,12 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
       try {
         const response = await send({ op: "feed", runId, feed });
         const checkpoint = response.data?.checkpoint as string | null;
-        const cutoff = response.data?.cutoff as number | null;
+        // Posts published at or before this time are older than the scan wants.
+        const boundary = response.data?.boundary as number | null;
+        // Following ends at its boundary; only For You needs post/scroll limits.
+        const limited = response.data?.limited !== false;
+        const atPostLimit = () => limited && seen.size >= s.maxPosts;
         let dateReached = false;
-        // Old posts seen since the last new in-range post. For You is not
-        // chronological and reposts carry old dates, so one old post is not
-        // enough to stop; several in a row are.
-        const oldStreak = new Set<string>();
         await switchFeed(document, feed, signal);
         await waitFor(
           () =>
@@ -68,6 +77,9 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
           signal,
           10000,
         );
+        // Cards are in feed order. A feed ends after OLD_RUN old originals in a
+        // row. Reposts show the original's date, not when they were reposted,
+        // so they never count as old, and ads are ignored.
         const capture = (cards: Element[]) => {
           const blocked = barrier(document, location.href);
           if (
@@ -78,9 +90,9 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
             unsafe = blocked ?? "Feed or account changed during scan";
             return;
           }
+          let oldRun = 0;
           for (const card of cards) {
-            if (checkpointReached || dateReached || seen.size >= s.maxPosts)
-              break;
+            if (checkpointReached || dateReached || atPostLimit()) break;
             const p = cachedCards.read(card);
             if (!p) {
               if (!malformed.has(card)) {
@@ -89,24 +101,25 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
               }
               continue;
             }
-            if (
-              typeof cutoff === "number" &&
+            const original = !p.reposter && !p.promoted;
+            // A repost of the checkpoint post can surface above newer posts;
+            // only the original marks where the previous scan started.
+            if (p.id === checkpoint && original) checkpointReached = true;
+            else if (
+              typeof boundary === "number" &&
               p.publishedAt !== null &&
-              p.publishedAt <= cutoff
+              p.publishedAt <= boundary
             ) {
-              if (!seen.has(p.id)) oldStreak.add(p.id);
-              if (oldStreak.size >= 3) {
-                dateReached = true;
-                break;
+              if (!p.reposter) {
+                if (!p.promoted && ++oldRun >= OLD_RUN) dateReached = true;
+                continue;
               }
-              continue;
-            }
+              // Old reposts are kept: their place in the feed is the repost.
+            } else if (original) oldRun = 0;
             if (!seen.has(p.id)) {
               seen.add(p.id);
               pending.set(p.id, p);
-              oldStreak.clear();
             }
-            if (p.id === checkpoint) checkpointReached = true;
           }
         };
         const captureAll = () =>
@@ -137,16 +150,12 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
             attributeFilter: extractionAttributes,
           },
         );
-        const feedStart = Date.now();
         const flush = async () => {
           while (pending.size) {
             const posts = [...pending.values()].slice(0, 10);
             for (const p of posts) {
               pending.delete(p.id);
-              p.followers = await followers(
-                p.handle,
-                Math.min(started + 205000, feedStart + s.maxSeconds * 1000),
-              );
+              p.followers = await followers(p.handle, Infinity);
               signal.throwIfAborted();
               const blocked = barrier(document, location.href);
               if (
@@ -166,7 +175,9 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
           captureAll();
           await flush();
           if (dateReached) {
-            reason = "24-hour cutoff reached";
+            reason = checkpoint
+              ? "Posts older than the previous scan reached"
+              : "24-hour cutoff reached";
             complete = true;
             break;
           }
@@ -175,20 +186,12 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
             complete = true;
             break;
           }
-          if (seen.size >= s.maxPosts) {
+          if (atPostLimit()) {
             reason = "Post limit reached";
             complete = true;
             break;
           }
-          if (
-            Date.now() - feedStart >= s.maxSeconds * 1000 ||
-            Date.now() - started > 205000
-          ) {
-            reason = "Time limit reached";
-            complete = true;
-            break;
-          }
-          if (steps >= s.maxSteps) {
+          if (limited && steps >= s.maxSteps) {
             reason = "Scroll limit reached";
             complete = true;
             break;
@@ -199,18 +202,16 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
             exhausted = true;
             break;
           }
+          // Renews the scan lease; scans have no overall time limit.
+          await send({ op: "heartbeat", runId });
           const before = seen.size;
           window.scrollBy({
             top: Math.max(500, innerHeight * 0.8),
             behavior: "instant",
           });
           steps++;
-          // Give each scroll 1.5–3 seconds to settle, within collection deadlines.
-          const pause = Math.min(
-            1500 + Math.floor(Math.random() * 1501),
-            Math.max(0, feedStart + s.maxSeconds * 1000 - Date.now()),
-            Math.max(0, started + 205000 - Date.now()),
-          );
+          // Give each scroll 1.5–3 seconds to settle.
+          const pause = 1500 + Math.floor(Math.random() * 1501);
           await new Promise((r) => setTimeout(r, pause));
           signal.throwIfAborted();
           captureAll();
@@ -218,6 +219,9 @@ async function scan(runId: string, s: Settings, signal: AbortSignal) {
           empty = seen.size === before ? empty + 1 : 0;
         }
         await flush();
+        // Reading past the checkpoint's date also reaches it, e.g. when the
+        // checkpoint post was deleted.
+        if (checkpoint && dateReached) checkpointReached = true;
         if (checkpoint && !checkpointReached && complete)
           reason += "; previous checkpoint not encountered";
       } catch (e) {

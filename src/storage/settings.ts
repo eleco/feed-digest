@@ -23,6 +23,7 @@ export async function settings(): Promise<Settings> {
     "daily",
     "time",
     "allowFocus",
+    "maxSeconds",
   ])
     delete (saved as unknown as Record<string, unknown>)[removed];
   return {

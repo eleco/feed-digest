@@ -32,6 +32,10 @@ async function browserSession() {
   return id;
 }
 // The recovery alarm only runs while a scan or analysis is active.
+// Every scan-tab message renews the lease, so a scan has no overall time limit
+// but one that stops reporting is interrupted by the recovery alarm.
+const SCAN_LEASE = 120000;
+const DAY = 24 * 60 * 60 * 1000;
 const watchRun = () => chrome.alarms.create("recovery", { periodInMinutes: 1 });
 const unwatchRun = () => chrome.alarms.clear("recovery");
 let queue = Promise.resolve<unknown>(undefined);
@@ -100,7 +104,66 @@ async function recover() {
       );
   }
 }
-async function start() {
+type Area = { left: number; top: number; width: number; height: number };
+// The usable screen area sent by the page that started the scan. The service
+// worker cannot read screen size itself.
+function screenArea(raw: unknown): Area | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const a = raw as Record<string, unknown>;
+  const values = [a.left, a.top, a.width, a.height];
+  if (!values.every((v) => Number.isInteger(v) && Math.abs(v as number) < 1e5))
+    return undefined;
+  const area = a as Area;
+  return area.width > 0 && area.height > 0 ? area : undefined;
+}
+// X switches to a narrow layout without the feed column below roughly this
+// width, so the scan window is never made smaller.
+const SCAN_MIN_WIDTH = 1024;
+const DIGEST_MIN_WIDTH = 420;
+// X may stop loading posts in a hidden tab, so the scan tab cannot share a
+// window with the live digest. Open both as new windows side by side across
+// the screen; existing windows are untouched.
+async function openScanWindows(screen?: Area) {
+  const base: Partial<Area> =
+    screen ??
+    (await chrome.windows.getLastFocused().catch(() => undefined)) ??
+    {};
+  const left = base.left ?? 0,
+    top = base.top ?? 0,
+    width = base.width ?? 1280,
+    height = base.height ?? 800;
+  const scanWidth = Math.max(SCAN_MIN_WIDTH, Math.round(width * 0.6));
+  // Without room for both, the digest opens behind the scan window instead.
+  const split = width - scanWidth >= DIGEST_MIN_WIDTH;
+  // Chrome rejects bounds mostly off-screen (e.g. after a display change);
+  // fall back to its default placement rather than failing the scan.
+  const open = (
+    data: chrome.windows.CreateData,
+    bounds: Pick<
+      chrome.windows.CreateData,
+      "left" | "top" | "width" | "height"
+    >,
+  ) =>
+    chrome.windows
+      .create({ ...data, ...bounds })
+      .catch(() => chrome.windows.create(data));
+  const monitor = await open(
+    { url: chrome.runtime.getURL("digest.html"), focused: false },
+    split
+      ? { left: left + scanWidth, top, width: width - scanWidth, height }
+      : {},
+  );
+  const scan = await open(
+    { url: "about:blank", focused: true },
+    { left, top, width: scanWidth, height },
+  );
+  const monitorTabId = monitor?.tabs?.[0]?.id;
+  const tabId = scan?.tabs?.[0]?.id;
+  if (monitorTabId === undefined || tabId === undefined)
+    throw Error("Could not open the scan windows");
+  return { monitorTabId, tabId };
+}
+async function start(screen?: Area) {
   await ready;
   await recover();
   await prune();
@@ -113,7 +176,7 @@ async function start() {
     feed: null,
     startedAt: Date.now(),
     updatedAt: Date.now(),
-    leaseUntil: Date.now() + 230000,
+    leaseUntil: Date.now() + SCAN_LEASE,
     reason: "",
     feeds: {
       following: {
@@ -155,21 +218,17 @@ async function start() {
     // A new scan adds to the saved collection. Set this before opening the
     // monitor so popup-started scans cannot inherit an older scan-only view.
     await chrome.storage.local.set({ digestScope: "all" });
-    const monitor = await chrome.tabs.create({
-      url: chrome.runtime.getURL("digest.html"),
-      active: false,
-    });
-    r.monitorTabId = monitor.id;
-    const tab = await chrome.tabs.create({ url: "about:blank", active: false });
-    r.tabId = tab.id;
+    const opened = await openScanWindows(screen);
+    r.monitorTabId = opened.monitorTabId;
+    r.tabId = opened.tabId;
     await put("runs", r);
     await chrome.action.setBadgeText({ text: "…" });
-    const navigating = await chrome.tabs.update(tab.id!, {
+    const navigating = await chrome.tabs.update(opened.tabId, {
       url: "https://x.com/home",
       active: true,
     });
     if (navigating?.status === "complete" && isHome(navigating.url ?? ""))
-      await launch(tab.id!);
+      await launch(opened.tabId);
   } catch {
     await finish(r, "blocked", "Could not open the scan tab");
   }
@@ -213,7 +272,6 @@ async function launch(tabId: number) {
       runId: r.id,
       settings: {
         maxPosts: r.settings.maxPosts,
-        maxSeconds: r.settings.maxSeconds,
         maxSteps: r.settings.maxSteps,
       },
     });
@@ -338,7 +396,7 @@ async function message(
   if (!m || typeof m !== "object" || JSON.stringify(m).length > 300000)
     throw Error("Invalid message");
   if (uiSender(sender)) {
-    if (m.op === "start") return start();
+    if (m.op === "start") return start(screenArea(m.screen));
     if (m.op === "analyse") return analyse(m.scope ?? "latest", m.postIds);
     if (m.op === "stop") {
       const r = await current();
@@ -400,6 +458,7 @@ async function message(
     throw Error("Stale or untrusted scan message");
   const tab = await chrome.tabs.get(r.tabId!);
   if (!isHome(tab.url ?? "")) throw Error("Scan left home");
+  r.leaseUntil = Date.now() + SCAN_LEASE;
   if (m.op === "identity") {
     if (
       typeof m.account !== "string" ||
@@ -424,23 +483,38 @@ async function message(
     r.phase = "Reading " + m.feed;
     r.updatedAt = Date.now();
     await put("runs", r);
-    const checkpoint = await get<{ account: string; postId: string }>(
-      "meta",
-      "checkpoint:" + m.feed,
-    );
+    const dayAgo = r.startedAt - DAY;
+    const dated = r.settings.stopMode === "last24hours";
+    // For You is not chronological: no checkpoint, and limits always apply.
+    if (m.feed === "for-you")
+      return {
+        checkpoint: null,
+        boundary: dated ? dayAgo : null,
+        limited: true,
+      };
+    // Following runs to its boundary, however long that takes.
+    const saved = await get<{
+      account: string;
+      postId: string;
+      publishedAt?: number;
+    }>("meta", "checkpoint:following");
+    const checkpoint =
+      !dated && saved && saved.account === r.account ? saved : undefined;
+    // Checkpoints from older versions only stored the post ID.
+    const since =
+      checkpoint?.publishedAt ??
+      (checkpoint
+        ? (await get<Post>("posts", checkpoint.postId))?.publishedAt
+        : null);
     return {
-      // For You is not chronological, so a saved post is no boundary there.
-      checkpoint:
-        r.settings.stopMode !== "last24hours" &&
-        m.feed === "following" &&
-        checkpoint &&
-        checkpoint.account === r.account
-          ? checkpoint.postId
-          : null,
-      cutoff:
-        r.settings.stopMode === "last24hours"
-          ? r.startedAt - 24 * 60 * 60 * 1000
-          : null,
+      checkpoint: checkpoint?.postId ?? null,
+      // Never reach back past saved-post retention; with no checkpoint, read
+      // the last 24 hours.
+      boundary:
+        typeof since === "number"
+          ? Math.max(since, r.startedAt - 30 * DAY)
+          : dayAgo,
+      limited: false,
     };
   } else if (m.op === "batch") {
     if (
@@ -455,7 +529,8 @@ async function message(
     const feed = r.feed as Feed;
     await transaction(["posts", "runs"], async (tx) => {
       for (const raw of m.posts as Post[]) {
-        if (r.feeds[feed].count >= r.settings.maxPosts) break;
+        if (feed === "for-you" && r.feeds[feed].count >= r.settings.maxPosts)
+          break;
         const p = {
           ...raw,
           pinned: false,
@@ -469,9 +544,19 @@ async function message(
           !old?.observations.some((o) => o.runId === r.id && o.feed === feed)
         ) {
           r.feeds[feed].count++;
-          // The first accepted post is the top of the feed for this scan.
-          if (!r.firstCollected?.[feed])
-            r.firstCollected = { ...r.firstCollected, [feed]: p.id };
+          // The next checkpoint is the newest dated original post. Reposts
+          // and ads can be re-shown above newer posts, so they never qualify.
+          const newest = r.newestCollected?.[feed];
+          if (
+            !p.reposter &&
+            !p.promoted &&
+            p.publishedAt !== null &&
+            (!newest || p.publishedAt > newest.publishedAt)
+          )
+            r.newestCollected = {
+              ...r.newestCollected,
+              [feed]: { postId: p.id, publishedAt: p.publishedAt },
+            };
           r.lastCollected = { ...r.lastCollected, [feed]: p.id };
         }
         tx.objectStore("posts").put(mergePost(old, p));
@@ -494,7 +579,7 @@ async function message(
       (f.exhausted !== undefined && typeof f.exhausted !== "boolean") ||
       !Number.isInteger(f.skipped) ||
       !Number.isInteger(f.steps) ||
-      Number(f.steps) > r.settings.maxSteps ||
+      (r.feed === "for-you" && Number(f.steps) > r.settings.maxSteps) ||
       Number(f.steps) < 0 ||
       Number(f.skipped) < 0
     )
@@ -507,22 +592,25 @@ async function message(
       complete: f.complete,
     };
     r.updatedAt = Date.now();
+    const id = "checkpoint:" + r.feed;
+    const previous = await get<{ account: string }>("meta", id);
     await transaction(["runs", "meta"], async (tx) => {
-      const postId = r.firstCollected?.[r.feed!];
-      const id = "checkpoint:" + r.feed;
-      // Always advance to the newest post of this scan. Every scan starts at
-      // the top, so an old boundary a limit kept us from reaching only gets
-      // further away; keeping it would make every later scan run to its limits.
+      const newest = r.newestCollected?.[r.feed!];
+      // Advance only once this scan has read back to the previous boundary.
+      // Otherwise the posts between where it stopped and the old checkpoint
+      // would never be collected; the next scan reads down to it instead.
       if (
         r.settings.stopMode !== "last24hours" &&
         r.feed === "following" &&
         f.complete &&
-        postId
+        newest &&
+        (f.checkpointReached || !previous || previous.account !== r.account)
       )
         tx.objectStore("meta").put({
           id,
           account: r.account,
-          postId,
+          postId: newest.postId,
+          publishedAt: newest.publishedAt,
           at: Date.now(),
         });
       tx.objectStore("runs").put(r);
@@ -537,13 +625,25 @@ async function message(
         : "Collection blocked",
     );
     return;
+  } else if (m.op === "heartbeat") {
+    // Only the lease changes; leaving updatedAt alone keeps the live digest
+    // from re-rendering on every scroll.
+    await put("runs", r);
+    return;
   } else if (m.op === "collected") {
     r.reason = Object.values(r.feeds)
       .filter((f) => !f.complete)
       .map((f) => f.reason)
       .join("; ");
     await finish(r, r.reason ? "partial" : "completed", r.reason);
-    await chrome.tabs.update(r.monitorTabId!, { active: true }).catch(() => {});
+    await chrome.tabs
+      .update(r.monitorTabId!, { active: true })
+      .then((monitor) =>
+        monitor
+          ? chrome.windows.update(monitor.windowId, { focused: true })
+          : undefined,
+      )
+      .catch(() => {});
     return;
   } else throw Error("Unknown scan operation");
   r.updatedAt = Date.now();

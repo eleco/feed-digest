@@ -1,4 +1,13 @@
-import { button, command, el, link, notice, runSummary, shell } from "./common";
+import {
+  button,
+  command,
+  el,
+  link,
+  notice,
+  runSummary,
+  screenArea,
+  shell,
+} from "./common";
 import { current, lastScan } from "../storage/db";
 import { active } from "../shared/types";
 document.body.classList.add("popup");
@@ -13,7 +22,7 @@ const actions = el("div", undefined, "actions");
 const scan = button(
   "Scan both feeds",
   async () => {
-    await command("start");
+    await command("start", { screen: screenArea() });
     await update();
   },
   "primary",

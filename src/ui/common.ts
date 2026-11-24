@@ -41,6 +41,17 @@ export function notice(text: string) {
   const target = document.querySelector("#notice");
   if (target) target.textContent = text;
 }
+// Usable screen area, so a scan can lay out its windows across the screen
+// rather than inside whichever (possibly narrow) window started it.
+export function screenArea() {
+  const s = screen as Screen & { availLeft?: number; availTop?: number };
+  return {
+    left: Math.round(s.availLeft ?? 0),
+    top: Math.round(s.availTop ?? 0),
+    width: Math.round(s.availWidth),
+    height: Math.round(s.availHeight),
+  };
+}
 export async function command(op: string, data: Record<string, unknown> = {}) {
   const r = await chrome.runtime.sendMessage({ ...data, op });
   if (!r?.ok) throw Error(r?.error ?? "Action failed");

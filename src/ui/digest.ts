@@ -39,6 +39,7 @@ import {
   notice,
   postTime,
   runSummary,
+  screenArea,
 } from "./common";
 import {
   all,
@@ -123,7 +124,7 @@ collectionControl.append(collectionLabel, collectionSelect);
 const scan = button(
   "Scan both feeds ↗",
   async () => {
-    await command("start");
+    await command("start", { screen: screenArea() });
     scope = "all";
     await chrome.storage.local.set({ digestScope: scope });
     await refresh(true);
@@ -656,6 +657,19 @@ const compactNumber = new Intl.NumberFormat("en", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
+// Live header text while a scan runs; posts appear in the list as they save.
+function scanProgress(run: Run) {
+  const feed =
+    run.feed === "following"
+      ? "Following"
+      : run.feed === "for-you"
+        ? "For You"
+        : null;
+  const count = run.postIds.length;
+  return feed
+    ? `Scanning ${feed}… ${count.toLocaleString()} post${count === 1 ? "" : "s"} so far`
+    : "Scanning…";
+}
 function render() {
   const now = Date.now();
   dateMinute = Math.floor(now / 60000);
@@ -1007,7 +1021,7 @@ function render() {
   headerState.textContent = !run
     ? "No scans yet"
     : run.state === "collecting"
-      ? "Scanning…"
+      ? scanProgress(run)
       : run.state === "ranking"
         ? "Analysing…"
         : run.state === "completed"
@@ -1023,15 +1037,17 @@ function render() {
   for (const b of filters.querySelectorAll<HTMLButtonElement>("button")) {
     const id = b.dataset.filter!;
     b.setAttribute("aria-pressed", String(id === filter));
+    // Counts follow the selected time period, like the list below them.
     const count = posts.filter(
       (p) =>
-        id === "all" ||
-        p.observations.some(
-          (o) =>
-            o.feed === id &&
-            (scope === "all" ||
-              o.runId === (scope === "latest" ? latestScanId : scope)),
-        ),
+        inDateRange(p.publishedAt, from, to) &&
+        (id === "all" ||
+          p.observations.some(
+            (o) =>
+              o.feed === id &&
+              (scope === "all" ||
+                o.runId === (scope === "latest" ? latestScanId : scope)),
+          )),
     ).length;
     b.querySelector(".feed-count")!.textContent = count.toLocaleString();
   }
@@ -1133,7 +1149,7 @@ function render() {
         active(run)
           ? "Keep the scan tab open. Saved posts will appear here when collection finishes."
           : scanFailed
-            ? `${runSummary(run)} Check that you are signed in to X in this browser, then scan again.`
+            ? `${runSummary(run)} ${/layout/i.test(run?.reason ?? "") ? "Make sure the X window is wide enough to show the Following and For you tabs, then scan again." : "Check that you are signed in to X in this browser, then scan again."}`
             : digest?.items.length
               ? "Try All dates, or change an author, category or display filter."
               : "Start a scan to create your first digest, or choose another feed filter.",

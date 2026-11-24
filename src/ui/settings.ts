@@ -33,14 +33,13 @@ form.innerHTML = `
 
 
 <p id="enableStatus" class="connection-status" aria-live="polite">Checking setup…</p></div></section>
-<section class="panel"><h2>Scan settings</h2><p class="muted">These limits apply separately to Following and For You. Each feed stops as soon as any limit is reached, or when no new posts load.</p>
-<label for="stopMode">Stop scrolling at</label><select id="stopMode" aria-describedby="stopModeHelp"><option value="checkpoint">Where my previous scan started</option><option value="last24hours">Posts older than 24 hours</option></select><small id="stopModeHelp">Previous scan: Following stops at the newest post from your last completed scan, so you mostly collect what is new. For You is not in date order, so it always runs to your limits. 24 hours: older posts are skipped, and the feed stops after three of them in a row. Post, time and scroll limits always apply.</small>
+<section class="panel"><h2>Scan settings</h2><p class="muted">Following reads back to where it should stop, however long that takes. For You has no natural end, so it stops at the post and scroll limits below. Both stop if no new posts load.</p>
+<label for="stopMode">Stop scrolling at</label><select id="stopMode" aria-describedby="stopModeHelp"><option value="checkpoint">Where my previous scan started</option><option value="last24hours">Posts older than 24 hours</option></select><small id="stopModeHelp">Previous scan: Following stops at posts older than the newest post of your last completed scan, or older than 24 hours if there is none. 24 hours: For You also skips older posts. Each feed stops after five older posts in a row; reposts are always kept because X shows the original post's date.</small>
 <label class="check"><input id="hideImages" type="checkbox" aria-describedby="hideImagesHelp">Hide post images while scanning</label><small id="hideImagesHelp">Hides photos and avatars in the scan tab only. Images may still download.</small>
 <div class="form-grid">
-<div><label for="maxPosts">Posts per feed (maximum 1,000)</label><input id="maxPosts" type="number" min="1" max="1000" aria-describedby="maxPostsHelp"><small id="maxPostsHelp">Maximum number of distinct posts to collect from each feed. A post found in both feeds is saved once.</small></div>
-<div><label for="maxSeconds">Seconds per feed (maximum 90)</label><input id="maxSeconds" type="number" min="5" max="90" aria-describedby="maxSecondsHelp"><small id="maxSecondsHelp">Time spent scrolling each feed. AI analysis is separate.</small></div>
-<div><label for="maxSteps">Scroll steps per feed (maximum 100)</label><input id="maxSteps" type="number" min="1" max="100" aria-describedby="maxStepsHelp"><small id="maxStepsHelp">Maximum automatic scrolls in each feed. Each scroll waits 1.5 to 3 seconds for posts to load.</small></div>
-</div><div id="checkpointActions" class="actions"></div><small>Resetting forgets where previous scans started, so the next scan goes as deep as the limits allow.</small></section>
+<div><label for="maxPosts">For You posts (maximum 1,000)</label><input id="maxPosts" type="number" min="1" max="1000" aria-describedby="maxPostsHelp"><small id="maxPostsHelp">Maximum number of distinct posts to collect from For You. A post found in both feeds is saved once.</small></div>
+<div><label for="maxSteps">For You scroll steps (maximum 100)</label><input id="maxSteps" type="number" min="1" max="100" aria-describedby="maxStepsHelp"><small id="maxStepsHelp">Maximum automatic scrolls in For You. Each scroll waits 1.5 to 3 seconds for posts to load.</small></div>
+</div><div id="checkpointActions" class="actions"></div><small>Resetting forgets where previous scans started, so the next Following scan reads the last 24 hours.</small></section>
 <p id="saveStatus" class="muted" aria-live="polite">Changes save automatically and apply to the next scan.</p>`;
 main.append(form);
 form.after(await jevSettings());

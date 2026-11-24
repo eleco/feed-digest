@@ -290,7 +290,6 @@ test("settings autosave rapid edits, reject invalid limits and persist after rel
   await expect(page.locator("#saveStatus")).toContainText("Changes saved");
   await page.locator("#maxPosts").fill("1001");
   await expect(page.locator("#saveStatus")).toContainText("Not saved");
-  await page.locator("#maxSeconds").fill("60");
   await expect
     .poll(async () =>
       page.evaluate(
@@ -298,7 +297,6 @@ test("settings autosave rapid edits, reject invalid limits and persist after rel
       ),
     )
     .toMatchObject({
-      maxSeconds: 60,
       maxPosts: 1000,
       maxSteps: 100,
       hideImages: true,
@@ -639,7 +637,7 @@ test("worker restart preserves committed batches and the single run lease", asyn
   await page.evaluate(() => chrome.runtime.sendMessage({ op: "stop" }));
 });
 
-test("a configured scroll cap stops both feeds without runaway scrolling", async () => {
+test("a configured scroll cap stops For You while Following reads to its end", async () => {
   const page = await context.newPage();
   await page.goto(base + "/settings.html");
   await page.locator("#maxSteps").fill("1");
@@ -654,10 +652,15 @@ test("a configured scroll cap stops both feeds without runaway scrolling", async
   const run = (await stores(page)).runs[0] as {
     feeds: Record<string, { steps: number; reason: string }>;
   };
-  for (const result of Object.values(run.feeds)) {
-    expect(result.steps).toBe(1);
-    expect(result.reason).toBe("Scroll limit reached");
-  }
+  expect(run.feeds["for-you"]).toMatchObject({
+    steps: 1,
+    reason: "Scroll limit reached",
+  });
+  // Following has no post or scroll limit; it stops when nothing new loads.
+  expect(run.feeds.following).toMatchObject({
+    steps: 3,
+    reason: "No new posts in three settled scroll cycles",
+  });
 });
 
 test("a browser-session change never closes a tab referenced by an old numeric ID", async () => {
@@ -767,7 +770,9 @@ for (const hideImages of [false, true]) {
     const incoming = scan
       .locator("article")
       .filter({ has: scan.locator('a[href="/example/status/300"]') });
-    await expect(incoming).toHaveCount(1);
+    // Following has no scroll limit, so it settles for three empty cycles
+    // before For You starts.
+    await expect(incoming).toHaveCount(1, { timeout: 20000 });
     await expect(incoming.locator("[data-fixture-photo]")).toBeVisible({
       visible: !hideImages,
     });
@@ -816,7 +821,7 @@ test("image hiding is removed when the scan tab leaves home without reloading", 
   expect((await stores(page)).posts).toHaveLength(2);
 });
 
-test("the Following checkpoint advances to the newest post, stops later scans there and can be reset", async () => {
+test("the Following checkpoint ignores reposts, advances only once reached, stops by date and can be reset", async () => {
   const page = await context.newPage();
   await page.goto(base + "/settings.html");
   await page.locator("#maxPosts").fill("2");
@@ -833,6 +838,14 @@ test("the Following checkpoint advances to the newest post, stops later scans th
       )
       .toBe(count);
   };
+  const latest = async () =>
+    (
+      (await stores(page)).runs as unknown as {
+        startedAt: number;
+        postIds: string[];
+        feeds: Record<string, { reason: string; steps: number }>;
+      }[]
+    ).sort((a, b) => b.startedAt - a.startedAt)[0];
   const saved = async () =>
     Object.fromEntries(
       (await stores(page)).meta
@@ -842,59 +855,97 @@ test("the Following checkpoint advances to the newest post, stops later scans th
           (m as { postId: string; account: string }).postId,
         ]),
     );
+  const setFeeds = async (following: string, forYou: string) => {
+    fixtureHtml =
+      fixture +
+      `<script>feeds.following=${JSON.stringify(following)};feeds['for-you']=${JSON.stringify(forYou)};</script>`;
+  };
+  const repost = (id: string) =>
+    card(
+      id,
+      "A synthetic reposted post.",
+      '<span data-testid="socialContext">Someone reposted</span>',
+    );
+  const dated = (id: string, hours: number) =>
+    card(id).replace(
+      "2026-09-20T10:00:00Z",
+      new Date(Date.now() - hours * 3600000).toISOString(),
+    );
   await scan(1);
-  // The checkpoint is the newest (top) Following post of the completed scan.
-  // For You is not chronological, so it has none.
+  // The checkpoint is the newest Following post of the completed scan, with
+  // its date. For You is not chronological, so it has none.
   expect(await saved()).toEqual({ "checkpoint:following": "100" });
   expect(
     (await stores(page)).meta.find(
       (m) => (m as { id: string }).id === "checkpoint:following",
     ),
-  ).toMatchObject({ account: "@fixture" });
-  fixtureHtml =
-    fixture +
-    `<script>feeds.following=${JSON.stringify(card("50") + card("100") + card("200") + card("400"))};feeds['for-you']=${JSON.stringify(card("60") + card("100") + card("300") + card("500"))};</script>`;
+  ).toMatchObject({ account: "@fixture", publishedAt: expect.any(Number) });
+  await setFeeds(
+    card("50") + card("100") + card("200") + card("400"),
+    card("60") + card("100") + card("300") + card("500"),
+  );
   await page.reload();
   await page.locator("#maxPosts").fill("10");
   await expect(page.locator("#saveStatus")).toContainText("Changes saved");
   await scan(2);
-  const data = await stores(page);
-  const second = data.runs.find(
-    (r) => (r as { settings: { maxPosts: number } }).settings.maxPosts === 10,
-  ) as {
-    postIds: string[];
-    feeds: Record<string, { reason: string; steps: number }>;
-  };
-  // Following collects only posts newer than the previous scan's top post,
-  // plus the checkpoint post itself as the overlap. For You reads everything.
-  expect(second.postIds).toEqual(["50", "100", "60", "300", "500"]);
-  expect(second.feeds.following).toMatchObject({
+  // Following collects posts newer than the previous scan's newest post, plus
+  // the checkpoint post itself as the overlap. For You reads everything.
+  let run = await latest();
+  expect(run.postIds).toEqual(["50", "100", "60", "300", "500"]);
+  expect(run.feeds.following).toMatchObject({
     reason: "Previous scan checkpoint reached",
     steps: 0,
   });
-  expect(second.feeds["for-you"]).toMatchObject({
+  expect(run.feeds["for-you"]).toMatchObject({
     reason: "No new posts in three settled scroll cycles",
   });
-  // Reaching the checkpoint advances it to this scan's newest post.
   expect(await saved()).toEqual({ "checkpoint:following": "50" });
-  // A scan stopped by a limit before reaching the checkpoint still advances
-  // it; otherwise every later scan would start even further above it.
-  fixtureHtml =
-    fixture +
-    `<script>feeds.following=${JSON.stringify(card("40") + card("45") + card("50"))};feeds['for-you']=${JSON.stringify(card("55") + card("58") + card("60"))};</script>`;
+
+  // A repost of the checkpoint post at the top does not stop the scan, and
+  // never becomes the next checkpoint. Following ignores the post limit.
+  await setFeeds(
+    repost("50") + card("40") + card("45") + card("50") + card("55"),
+    card("70"),
+  );
   await page.reload();
   await page.locator("#maxPosts").fill("1");
+  await page.locator("#maxSteps").fill("1");
   await expect(page.locator("#saveStatus")).toContainText("Changes saved");
   await scan(3);
+  run = await latest();
+  expect(run.postIds).toEqual(["50", "40", "45", "70"]);
+  expect(run.feeds.following.reason).toBe("Previous scan checkpoint reached");
   expect(await saved()).toEqual({ "checkpoint:following": "40" });
-  expect(
-    (
-      (await stores(page)).runs.find(
-        (r) =>
-          (r as { settings: { maxPosts: number } }).settings.maxPosts === 1,
-      ) as { feeds: Record<string, { reason: string }> }
-    ).feeds.following.reason,
-  ).toBe("Post limit reached; previous checkpoint not encountered");
+
+  // A scan that never reaches the checkpoint keeps it, so the next scan reads
+  // down to it instead of losing the posts in between.
+  await setFeeds(card("30") + card("35"), card("70"));
+  await scan(4);
+  run = await latest();
+  expect(run.feeds.following.reason).toBe(
+    "No new posts in three settled scroll cycles; previous checkpoint not encountered",
+  );
+  expect(await saved()).toEqual({ "checkpoint:following": "40" });
+
+  // When the checkpoint post is gone, five older posts in a row end the feed
+  // and count as reaching it.
+  await setFeeds(
+    card("20") +
+      dated("21", 3) +
+      dated("22", 3) +
+      dated("23", 3) +
+      dated("24", 3) +
+      dated("25", 3) +
+      card("26"),
+    card("70"),
+  );
+  await scan(5);
+  run = await latest();
+  expect(run.postIds).toEqual(["20", "70"]);
+  expect(run.feeds.following.reason).toBe(
+    "Posts older than the previous scan reached",
+  );
+  expect(await saved()).toEqual({ "checkpoint:following": "20" });
   await page
     .getByRole("button", { name: "Reset scan checkpoints", exact: true })
     .click();
@@ -1684,7 +1735,7 @@ test("pregranted Claude connection tests the entered key instead of a stale save
   await expect(page.locator("#connectionStatus")).toContainText("Connected.");
 });
 
-test("24-hour stopping skips old posts, stops after three in a row, and preserves checkpoints", async () => {
+test("24-hour stopping skips old posts, keeps reposts, stops after five in a row, and preserves checkpoints", async () => {
   const page = await context.newPage();
   await page.goto(base + "/settings.html");
   await page.locator("#maxPosts").fill("1");
@@ -1710,17 +1761,26 @@ test("24-hour stopping skips old posts, stops after three in a row, and preserve
       "2026-09-20T10:00:00Z",
       new Date(Date.now() - hours * 3600000).toISOString(),
     );
-  // The saved marker is 100. The date mode must continue past it, skip an
-  // old repost between recent posts, collect an undated post, and stop after
-  // three old posts in a row without collecting anything below them.
+  // The saved marker is 100. The date mode must continue past it, skip old
+  // posts scattered between recent ones without stopping, collect an undated
+  // post, keep an old-dated repost without counting it as old, and stop after
+  // five old posts in a row without collecting anything below them.
   const cards =
     dated("100", 1) +
     dated("120", 30) +
     card("150").replace(' datetime="2026-09-20T10:00:00Z"', "") +
+    dated("160", 31) +
     dated("200", 2) +
+    dated("210", 32) +
     dated("300", 25) +
     dated("400", 26) +
+    dated("250", 40).replace(
+      "</article>",
+      '<span data-testid="socialContext">Someone reposted</span></article>',
+    ) +
     dated("500", 27) +
+    dated("510", 28) +
+    dated("520", 29) +
     dated("600", 1);
   fixtureHtml =
     fixture +
@@ -1740,7 +1800,7 @@ test("24-hour stopping skips old posts, stops after three in a row, and preserve
     postIds: string[];
     feeds: Record<string, { reason: string; steps: number }>;
   };
-  expect(run.postIds).toEqual(["100", "150", "200"]);
+  expect(run.postIds).toEqual(["100", "150", "200", "250"]);
   for (const result of Object.values(run.feeds))
     expect(result).toMatchObject({
       reason: "24-hour cutoff reached",
@@ -2242,9 +2302,16 @@ test("saved posts survive later scans and retain AI metadata", async () => {
     return new Date(to).getTime() - new Date(from).getTime();
   });
   expect(range).toBe(86400000);
+  // Feed filter counts follow the selected time period.
+  const feedCounts = () =>
+    page
+      .locator("[data-filter] .feed-count")
+      .evaluateAll((counts) => counts.map((c) => c.textContent));
+  await expect.poll(feedCounts).toEqual(["1", "1", "0"]);
   await page.getByLabel("When", { exact: true }).selectOption("3");
   await expect(page.locator("article.card")).toHaveCount(2);
   await expect(page.locator(".all-authors")).toHaveText("All authors (2)");
+  await expect.poll(feedCounts).toEqual(["2", "2", "0"]);
   await page.getByLabel("When", { exact: true }).selectOption("7");
   await expect(page.locator("article.card")).toHaveCount(2);
   await expect(page.locator(".all-authors")).toHaveText("All authors (2)");
@@ -2265,6 +2332,7 @@ test("saved posts survive later scans and retain AI metadata", async () => {
     "data-post-id",
     second.id,
   );
+  await expect.poll(feedCounts).toEqual(["1", "1", "0"]);
   await page.getByLabel("When", { exact: true }).selectOption("all");
   await expect(page.locator("article.card")).toHaveCount(2);
   await expect(page.locator(".all-authors")).toHaveText("All authors (2)");

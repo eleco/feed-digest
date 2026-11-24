@@ -62,7 +62,11 @@ export interface Run {
   reason: string;
   feeds: Record<Feed, FeedResult>;
   postIds: string[];
+  /** Older runs only; superseded by newestCollected. */
   firstCollected?: Partial<Record<Feed, string>>;
+  newestCollected?: Partial<
+    Record<Feed, { postId: string; publishedAt: number }>
+  >;
   lastCollected?: Partial<Record<Feed, string>>;
   requests: number;
   generation: string;
@@ -104,7 +108,6 @@ export interface Settings {
   model: string;
   enabled: boolean;
   maxPosts: number;
-  maxSeconds: number;
   maxSteps: number;
   hideImages: boolean;
   stopMode: "checkpoint" | "last24hours";
@@ -118,7 +121,6 @@ export const defaults: Settings = {
   model: "",
   enabled: false,
   maxPosts: 100,
-  maxSeconds: 90,
   maxSteps: 30,
   hideImages: false,
   stopMode: "checkpoint",
@@ -196,7 +198,6 @@ export function validateSettings(raw: unknown): Settings {
   }
   const ranges = {
     maxPosts: [1, 1000],
-    maxSeconds: [5, 90],
     maxSteps: [1, 100],
     requestsPerScan: [1, 6],
     requestsPerDay: [1, 12],

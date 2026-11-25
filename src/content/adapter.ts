@@ -291,9 +291,15 @@ export function extract(
     comments: cardEngagement(card, '[data-testid="reply"]'),
     views: cardEngagement(card, `a[href*="/status/${c.id}/analytics"]`),
     links: extractLinks(card, c.id),
+    video: hasVideo(card),
     pinned: false,
   };
 }
+// A video player in the post itself, whichever layout X uses.
+const hasVideo = (card: Element) =>
+  !!card.querySelector(
+    'video, [data-testid="videoPlayer"], [data-testid="videoComponent"]',
+  );
 // X post IDs (snowflakes) encode their creation time in milliseconds.
 const SNOWFLAKE_EPOCH = 1288834974657;
 export function idTime(id: string, now = Date.now()): number | null {
@@ -392,6 +398,7 @@ function extractStructural(
     comments: counted("repl(?:y|ies)", true),
     views: counted("views?", false),
     links: extractLinks(card, c.id),
+    video: hasVideo(card),
     pinned: false,
   };
 }

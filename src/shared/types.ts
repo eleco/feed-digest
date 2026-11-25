@@ -36,6 +36,8 @@ export interface Post {
   views?: number | null;
   followers?: number | null;
   links?: PostLink[];
+  /** The post plays a video itself (not a link to one). Unknown on older posts. */
+  video?: boolean;
   pinned: boolean;
 }
 export interface FeedResult {
@@ -47,6 +49,8 @@ export interface FeedResult {
 }
 export interface Run {
   analysisOnly?: boolean;
+  /** After scoring, pick the reader's top 20 with one editor request. */
+  topPicks?: boolean;
   aiAudit?: import("./audit").AIAudit;
   id: string;
   state: State;
@@ -83,6 +87,8 @@ export interface Ranked {
   mode: "basic" | "ai";
   sectors?: Sector[];
   tones?: Tone[];
+  /** 0–100 match to Settings.priorities; only when priorities are set. */
+  relevance?: number;
   recommendations?: {
     action: "buy" | "sell";
     asset: string;
@@ -105,6 +111,27 @@ export interface Feedback {
   value: "useful" | "not-useful";
   handle: string;
 }
+export const PRIORITIES_MAX = 600;
+export interface TopPick {
+  id: string;
+  /** AI-written: why this post is worth the reader's time. */
+  why: string;
+  /** Posts about the same story, folded under this pick. */
+  similar: string[];
+}
+export interface TopPicks {
+  id: "topPicks";
+  runId: string;
+  createdAt: number;
+  model: string;
+  /** Posts the picks were chosen from (the selection that was analysed). */
+  considered: number;
+  /** Posts sent to the editor request. */
+  shortlisted: number;
+  picks: TopPick[];
+  /** Set when the editor request failed and picks fall back to scores. */
+  fallback?: string;
+}
 export interface Settings {
   provider: Provider;
   model: string;
@@ -112,6 +139,8 @@ export interface Settings {
   maxPosts: number;
   maxSteps: number;
   hideImages: boolean;
+  /** Free text: what the reader cares about, used for relevance and top picks. */
+  priorities: string;
   stopMode: "checkpoint" | "last24hours";
   requestsPerScan: number;
   requestsPerDay: number;
@@ -125,6 +154,7 @@ export const defaults: Settings = {
   maxPosts: 100,
   maxSteps: 30,
   hideImages: false,
+  priorities: "",
   stopMode: "checkpoint",
   requestsPerScan: 6,
   requestsPerDay: 12,
@@ -176,6 +206,7 @@ export function validatePost(p: unknown): p is Post {
       (value) => value == null || (Number.isSafeInteger(value) && value >= 0),
     ) &&
     (x.links === undefined || validPostLinks(x.links)) &&
+    (x.video === undefined || typeof x.video === "boolean") &&
     ["reply", "promoted", "truncated", "mediaOnly", "pinned"].every(
       (k) => typeof x[k as keyof Post] === "boolean",
     )
@@ -194,6 +225,10 @@ export function validateSettings(raw: unknown): Settings {
   if (!["checkpoint", "last24hours"].includes(x.stopMode ?? "checkpoint"))
     throw Error("Invalid stop mode");
   s.stopMode = x.stopMode ?? "checkpoint";
+  const priorities = x.priorities ?? "";
+  if (typeof priorities !== "string" || priorities.length > PRIORITIES_MAX)
+    throw Error("Invalid priorities");
+  s.priorities = priorities;
   for (const k of ["enabled", "hideImages"] as const) {
     if (typeof x[k] !== "boolean") throw Error("Invalid settings");
     s[k] = x[k];

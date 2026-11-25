@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Top 20 favours posts that link to something to read and disfavours video: +6 for a link to an external page or document (including PDFs), −8 for a video (a playing video in the post, a video site such as YouTube, Vimeo or TikTok, an X video link or a video file). The editor sees each post's link type and is asked to prefer documents and avoid videos between posts of similar value. Scans now record whether a post plays a video; older posts need a new scan for that.
+
+- With What I care about left empty, Pick my top 20 now looks for the most interesting posts rather than only the most explanatory: half the shortlist comes from insight scores and half from unusual attention (views far beyond the author's followers, or likes high in the collection), and the editor is asked for important news, surprising facts, original ideas, strong arguments and the occasional genuinely funny post.
+
+- Pick my top 20: scores the posts in the current view (reusing cached scores), then sends the best ~60 to one AI "editor" request that groups posts about the same story, keeps variety and writes a one-line, clearly labelled AI reason for each pick. The digest's Top 20 view shows the picks in order with similar posts folded underneath; Full list shows everything. If the editor fails, the highest-scored posts are shown instead and the page says so.
+- Settings → What I care about: optional free text. When set, AI analysis also scores each post's relevance to it (0–100), and the top 20 favours it. It is part of the cache key, so changing it re-scores posts on the next analysis; without it, prompts and cached scores are unchanged.
+
 - Read posts that X renders without test ids or <time> elements, as seen on live X: the permalink gives the ID and handle, the publish time is decoded from the post ID, text comes from [lang] blocks, exact reply, like and view counts from the action bar's aria-label, and reposts and quoted posts are detected structurally. Posts with test ids are read exactly as before.
 
 - When a feed is not ready, report what X showed (tab state, post, article, text and cell counts, page visibility and width, and for a feed switch how many previous posts remain and how recently the page changed). Match post cards by their test id on any element.

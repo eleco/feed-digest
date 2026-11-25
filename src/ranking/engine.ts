@@ -6,12 +6,28 @@ import {
   type Post,
   type Ranked,
   type Run,
+  type TopPicks,
 } from "../shared/types";
 import { all, get, put, request, transaction } from "../storage/db";
 import { key } from "../storage/settings";
 import { scoreBasic, allPostItems } from "./basic";
 import { generate, origins, ProviderError } from "./providers";
-import { hash, makePrompt, PROMPT_VERSION, validateOutput } from "./prompt";
+import {
+  hash,
+  makePrompt,
+  ModelOutputError,
+  PROMPT_VERSION,
+  validateOutput,
+} from "./prompt";
+import {
+  EDITOR_PROMPT_BYTES,
+  fallbackPicks,
+  feedbackExamples,
+  makeEditorPrompt,
+  shortlist,
+  TOP_COUNT,
+  validateEditor,
+} from "./top";
 interface Usage {
   id: string;
   requests: number;
@@ -162,10 +178,11 @@ export async function rankRun(
         });
       };
       await saveAudit();
+      let token: string | undefined;
       try {
         if (!s.enabled || s.provider === "basic")
           throw Error("Basic mode selected");
-        const token = await key(s.provider);
+        token = await key(s.provider);
         if (!token)
           throw Error(
             "Provider key missing after restart or not configured; using Basic",
@@ -192,6 +209,9 @@ export async function rankRun(
                 post.text,
                 post.quotedText,
                 post.truncated,
+                // Relevance depends on the reader's priorities; without them
+                // the key (and cached assessments) stay as before.
+                ...(s.priorities.trim() ? [s.priorities.trim()] : []),
               ]),
             ));
           const cacheId = await postCacheId(PROMPT_VERSION);
@@ -388,6 +408,14 @@ export async function rankRun(
         await all<Feedback>("feedback"),
       ).filter((r) => !aiIds.has(r.id));
       const items = allPostItems(posts, s, results);
+      const topPicks =
+        run.topPicks && !signal.aborted
+          ? await pickTop(run, token, posts, results, notices, signal, pause, {
+              audit,
+              saveAudit,
+              addTokens: (count) => (tokens += count),
+            })
+          : undefined;
       if (audit) {
         audit.finishedAt = Date.now();
         audit.notices = [...notices];
@@ -399,7 +427,7 @@ export async function rankRun(
         }
         await saveAudit();
       }
-      await transaction(["runs", "digests"], async (tx) => {
+      await transaction(["runs", "digests", "meta"], async (tx) => {
         const live = await request<Run>(tx.objectStore("runs").get(run.id));
         if (
           !live ||
@@ -450,7 +478,121 @@ export async function rankRun(
         }
         tx.objectStore("digests").put(digest);
         tx.objectStore("runs").put(live);
+        if (topPicks) tx.objectStore("meta").put(topPicks);
       });
     },
   );
+}
+
+const bytes = (value: string) => new TextEncoder().encode(value).byteLength;
+/**
+ * Step two of a top-20 run: one editor request over the best-scored posts.
+ * It groups posts about the same story, keeps variety and says why each pick
+ * is worth reading. If it fails, the highest-scored posts are used instead.
+ */
+async function pickTop(
+  run: Run,
+  token: string | undefined,
+  posts: Post[],
+  results: Ranked[],
+  notices: string[],
+  signal: AbortSignal,
+  pause: (ms: number, signal: AbortSignal) => Promise<void>,
+  log: {
+    audit?: AIAudit;
+    saveAudit: () => Promise<void>;
+    addTokens: (count: number) => void;
+  },
+): Promise<TopPicks | undefined> {
+  const s = run.settings;
+  const feedback = await all<Feedback>("feedback");
+  let candidates = shortlist(posts, results, feedback, s);
+  if (!candidates.length) {
+    notices.push("Top 20 needs AI-analysed posts; none were available.");
+    return undefined;
+  }
+  const examples = feedbackExamples(await all<Post>("posts"), feedback);
+  let prompt = makeEditorPrompt(candidates, s, examples);
+  while (bytes(prompt) > EDITOR_PROMPT_BYTES && candidates.length > TOP_COUNT) {
+    candidates = candidates.slice(
+      0,
+      Math.max(TOP_COUNT, candidates.length - 5),
+    );
+    prompt = makeEditorPrompt(candidates, s, examples);
+  }
+  const base = {
+    id: "topPicks" as const,
+    runId: run.id,
+    createdAt: Date.now(),
+    model: s.model,
+    considered: posts.length,
+    shortlisted: candidates.length,
+  };
+  let failure = "";
+  try {
+    if (!token) throw Error("Provider key missing");
+    for (let tries = 1; ; tries++) {
+      signal.throwIfAborted();
+      await reserve(run.id);
+      const entry: AIAttempt = {
+        number: (log.audit?.attempts.length ?? 0) + 1,
+        kind: "editor",
+        postIds: candidates.map((c) => c.post.id),
+        startedAt: Date.now(),
+        status: "running",
+      };
+      log.audit?.attempts.push(entry);
+      await log.saveAudit();
+      try {
+        const response = await generate(
+          { ...s, outputTokens: Math.max(s.outputTokens, 4000) },
+          token,
+          prompt,
+          AbortSignal.any([signal, AbortSignal.timeout(60000)]),
+          (usage) => {
+            entry.usage = usage;
+            log.addTokens((usage.input ?? 0) + (usage.output ?? 0));
+          },
+        );
+        const picks = validateEditor(response.content, candidates);
+        entry.status = "success";
+        entry.finishedAt = Date.now();
+        await log.saveAudit();
+        return { ...base, picks };
+      } catch (error) {
+        entry.status = "error";
+        entry.finishedAt = Date.now();
+        entry.error = signal.aborted
+          ? "Cancelled"
+          : error instanceof Error
+            ? error.message
+            : "Editor request failed";
+        await log.saveAudit();
+        if (
+          signal.aborted ||
+          fatal(error) ||
+          !(transient(error) || error instanceof ModelOutputError) ||
+          tries >= 2
+        )
+          throw error;
+        await pause(
+          Math.min(
+            30000,
+            Math.max(
+              error instanceof ProviderError ? error.retryAfter : 0,
+              2000,
+            ),
+          ),
+          signal,
+        );
+      }
+    }
+  } catch (error) {
+    if (signal.aborted) return undefined;
+    failure = error instanceof Error ? error.message : "Editor request failed";
+  }
+  notices.push(
+    `Top 20 editor unavailable (${failure}); showing the highest-scored posts without grouping or reasons.`,
+  );
+  return { ...base, picks: fallbackPicks(candidates), fallback: failure };
 }

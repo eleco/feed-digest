@@ -31,7 +31,7 @@ export function updateAnalysisButton(
 }
 export function analysisButton(
   label: string,
-  selection: () => { scope: string; postIds: string[] },
+  selection: () => { scope: string; postIds: string[]; top?: boolean },
   confirmSelection?: () => boolean,
 ) {
   const control = button(label, async () => {

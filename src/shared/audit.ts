@@ -17,6 +17,8 @@ export interface AIAttempt {
   status: "running" | "success" | "error";
   error?: string;
   usage?: AIUsage;
+  /** "editor" for the single top-20 request; post analysis otherwise. */
+  kind?: "editor";
 }
 export interface AIPost {
   id: string;

@@ -535,6 +535,35 @@ describe("posts without test ids", () => {
     });
     expect(extract(inner, "for-you", "run")).toBeNull();
   });
+  it("notes a video playing in the post, in either layout", () => {
+    expect(
+      extract(
+        fixture(plainCard("2125233081846223231", "Clip")),
+        "following",
+        "run",
+      )!.video,
+    ).toBe(false);
+    expect(
+      extract(
+        fixture(
+          plainCard(
+            "2125233081846223231",
+            "Clip",
+            "<div><video></video></div>",
+          ),
+        ),
+        "following",
+        "run",
+      )!.video,
+    ).toBe(true);
+    expect(
+      extract(
+        fixture(card("100", "Clip", '<div data-testid="videoPlayer"></div>')),
+        "following",
+        "run",
+      )!.video,
+    ).toBe(true);
+  });
   it("treats missing counts as zero but missing views as unknown", () => {
     const p = extract(
       fixture(plainCard("2125233081846223231", "Quiet post", "", "Reply")),

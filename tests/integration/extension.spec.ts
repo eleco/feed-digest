@@ -2792,3 +2792,178 @@ test("scans posts rendered without test ids, dating them from their IDs", async 
     Math.abs(saved.publishedAt! - (Date.now() - 2 * 3600000)),
   ).toBeLessThan(60000);
 });
+
+test("pregranted Claude picks a personal top 20 with reasons and folded similar posts", async () => {
+  const posts = {
+    "100":
+      "Rate cut explainer: why the central bank moved and what it means for mortgages.",
+    "200": "Rate cut news: the central bank cut rates today.",
+    "300":
+      "A practical method for evaluating LLM agents with small test suites.",
+    "400": "Celebrity gossip about a red carpet outfit.",
+  };
+  const html = Object.entries(posts)
+    .map(([id, text]) => card(id, text))
+    .join("");
+  fixtureHtml =
+    fixture +
+    `<script>feeds.following=${JSON.stringify(html)};feeds['for-you']=${JSON.stringify(card("300", posts["300"]))};</script>`;
+  const scoring: string[] = [];
+  const editor: {
+    posts: { id: string; text: string }[];
+    readerPriorities?: string;
+  }[] = [];
+  let editorFails = false;
+  await context.route("https://api.anthropic.com/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.startsWith("/v1/models/"))
+      return route.fulfill({ json: { id: "claude-haiku-4-5-20251001" } });
+    if (path !== "/v1/messages") return route.abort();
+    const prompt: string = route.request().postDataJSON().messages[0].content;
+    const data = JSON.parse(
+      prompt.split("UNTRUSTED_DATA_JSON\n")[1].split("\nEND_DATA")[0],
+    );
+    const reply = (value: unknown) =>
+      route.fulfill({
+        json: {
+          content: [{ type: "text", text: JSON.stringify(value) }],
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+      });
+    if (prompt.startsWith("You are the reader's editor")) {
+      editor.push(data);
+      if (editorFails) return reply({ nothing: true });
+      const id = (text: string) =>
+        data.posts.find((p: { text: string }) => p.text.startsWith(text)).id;
+      return reply({
+        picks: [
+          {
+            id: id("A practical method"),
+            why: "A concrete way to test agents cheaply.",
+            similar: [],
+          },
+          {
+            id: id("Rate cut explainer"),
+            why: "Explains the rate cut and its effect on mortgages.",
+            similar: [id("Rate cut news")],
+          },
+        ],
+      });
+    }
+    scoring.push(prompt);
+    return reply({
+      items: data.posts.map((p: { id: string; text: string }) => ({
+        id: p.id,
+        score: p.text.startsWith("Rate cut explainer") ? 70 : 40,
+        relevance: p.text.startsWith("Celebrity") ? 0 : 80,
+        sectors: [],
+        tones: [],
+        recommendations: [],
+      })),
+    });
+  });
+  const page = await context.newPage();
+  await page.goto(base + "/settings.html");
+  await page.locator("#provider").selectOption("anthropic");
+  await page.locator("#model").selectOption("claude-haiku-4-5-20251001");
+  await page.locator("#apiKey").fill("synthetic-claude-key");
+  await page.getByRole("button", { name: "Save key", exact: true }).click();
+  await expect(page.locator("#notice")).toContainText("Key saved");
+  await page
+    .getByRole("button", { name: "Check connection", exact: true })
+    .click();
+  await expect(page.locator("#notice")).toContainText("Provider accepted");
+  await page
+    .getByLabel("What I care about", { exact: true })
+    .fill("Economics and AI engineering; skip celebrity news");
+  await expect(page.locator("#saveStatus")).toContainText("Changes saved");
+  await page.evaluate(() => chrome.runtime.sendMessage({ op: "start" }));
+  await expect
+    .poll(
+      async () =>
+        ((await stores(page)).runs[0] as { state: string } | undefined)?.state,
+      { timeout: 20000 },
+    )
+    .toBe("completed");
+
+  const digest = context
+    .pages()
+    .find((p) => p.url() === base + "/digest.html")!;
+  await digest.reload();
+  await expect(
+    digest.getByRole("button", { name: "Top 20", exact: true }),
+  ).toBeDisabled();
+  await digest.getByLabel("When", { exact: true }).selectOption("all");
+  await digest
+    .getByRole("button", { name: "Pick my top 20 from 4 posts", exact: true })
+    .click();
+
+  // Step 1 scored every post with the reader's priorities; step 2 sent the
+  // shortlist (ads and unscored posts excluded) to a single editor request.
+  await expect(digest.locator("article.card")).toHaveCount(2, {
+    timeout: 20000,
+  });
+  expect(scoring.every((p) => p.includes("Economics and AI engineering"))).toBe(
+    true,
+  );
+  expect(editor).toHaveLength(1);
+  expect(editor[0].readerPriorities).toBe(
+    "Economics and AI engineering; skip celebrity news",
+  );
+  expect(editor[0].posts).toHaveLength(4);
+  await expect(digest.locator("#visibleCount")).toHaveText("Top 2 for you");
+  await expect(
+    digest.getByRole("button", { name: "Top 20", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const first = digest.locator("article.card").first();
+  await expect(first).toHaveAttribute("data-post-id", "300");
+  await expect(first.locator(".top-why")).toHaveText(
+    "AIA concrete way to test agents cheaply.",
+  );
+  const second = digest.locator("article.card").nth(1);
+  await expect(second).toHaveAttribute("data-post-id", "100");
+  await second.getByText("+1 similar post on this story").click();
+  await expect(second.locator(".top-similar li")).toContainText(
+    "Rate cut news: the central bank cut rates today.",
+  );
+  await expect(digest.locator(".top-note")).toContainText(
+    "Chosen by AI from 4 posts",
+  );
+  await expect(digest.locator(".daily-themes")).toBeHidden();
+  const activity = (
+    (await stores(digest)).runs as {
+      aiAudit?: { attempts: { kind?: string; status: string }[] };
+    }[]
+  ).flatMap((r) => r.aiAudit?.attempts ?? []);
+  expect(activity.filter((a) => a.kind === "editor")).toEqual([
+    expect.objectContaining({ status: "success" }),
+  ]);
+
+  // Back to everything, and the choice is remembered.
+  await digest.getByRole("button", { name: "Full list", exact: true }).click();
+  await expect(digest.locator("article.card")).toHaveCount(4);
+  await expect(digest.locator(".daily-themes")).toBeVisible();
+  await digest.reload();
+  await expect(digest.locator("article.card")).toHaveCount(4);
+
+  // A failed editor falls back to the highest-scored posts, reusing the
+  // cached step-one scores, and says so.
+  editorFails = true;
+  const scored = scoring.length;
+  await digest.getByLabel("When", { exact: true }).selectOption("all");
+  await digest
+    .getByRole("button", { name: "Pick my top 20 from 4 posts", exact: true })
+    .click();
+  await expect(digest.locator(".top-note")).toContainText(
+    "The AI editor was unavailable",
+    { timeout: 20000 },
+  );
+  expect(scoring.length).toBe(scored);
+  expect(editor).toHaveLength(3);
+  await expect(digest.locator("article.card")).toHaveCount(4);
+  await expect(digest.locator("article.card").first()).toHaveAttribute(
+    "data-post-id",
+    "100",
+  );
+  await expect(digest.locator(".top-why")).toHaveCount(0);
+});

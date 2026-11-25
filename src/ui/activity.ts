@@ -188,7 +188,9 @@ function render() {
       for (const value of [
         String(req.number),
         req.status === "running" && !active(r) ? "Outcome unknown" : req.status,
-        req.postIds.join(", "),
+        req.kind === "editor"
+          ? `Top 20 editor · chose from ${req.postIds.length} posts`
+          : req.postIds.join(", "),
         req.finishedAt
           ? `${((req.finishedAt - req.startedAt) / 1000).toFixed(1)}s`
           : "—",
@@ -276,7 +278,7 @@ function render() {
         ),
       );
     const attempts = a.attempts
-      .filter((x) => x.postIds.includes(p.id))
+      .filter((x) => x.kind !== "editor" && x.postIds.includes(p.id))
       .map((x) => x.number);
     if (attempts.length)
       card.append(

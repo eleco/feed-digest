@@ -317,7 +317,11 @@ async function launch(tabId: number) {
     );
   }
 }
-async function analyse(scope: unknown = "latest", postIds?: unknown) {
+async function analyse(
+  scope: unknown = "latest",
+  postIds?: unknown,
+  top?: unknown,
+) {
   await recover();
   if (active(await current()))
     throw Error(
@@ -374,7 +378,8 @@ async function analyse(scope: unknown = "latest", postIds?: unknown) {
     id: crypto.randomUUID(),
     analysisOnly: true,
     state: "ranking",
-    phase: "Analysing collected posts",
+    phase: top === true ? "Picking your top 20" : "Analysing collected posts",
+    ...(top === true ? { topPicks: true } : {}),
     startedAt: now,
     updatedAt: now,
     leaseUntil: now + 180000,
@@ -428,7 +433,8 @@ async function message(
     throw Error("Invalid message");
   if (uiSender(sender)) {
     if (m.op === "start") return start(screenArea(m.screen));
-    if (m.op === "analyse") return analyse(m.scope ?? "latest", m.postIds);
+    if (m.op === "analyse")
+      return analyse(m.scope ?? "latest", m.postIds, m.top);
     if (m.op === "stop") {
       const r = await current();
       if (active(r))

@@ -45,6 +45,7 @@ import {
   all,
   current,
   feedback,
+  get,
   lastScan,
   latestScanOf,
   savedCollection,
@@ -59,6 +60,7 @@ import {
   type Post,
   type Ranked,
   type Run,
+  type TopPicks,
 } from "../shared/types";
 import "./digest.css";
 import { rankRun } from "../ranking/engine";
@@ -91,6 +93,20 @@ const analyse = analysisButton("Analyse with AI", () => ({
   scope,
   postIds: [...visiblePendingIds],
 }));
+// Every post in the current view, analysed or not: the top 20 is chosen from these.
+let visibleAllIds: string[] = [];
+let topPicks: TopPicks | undefined;
+const savedView = (await chrome.storage.local.get("digestView")).digestView;
+let topView = savedView === "top";
+const pickTop = analysisButton("Pick my top 20", () => {
+  // Show the picks as soon as they arrive.
+  topView = true;
+  void chrome.storage.local.set({ digestView: "top" });
+  return { scope, postIds: [...visibleAllIds], top: true };
+});
+pickTop.classList.add("primary");
+pickTop.title =
+  "Scores the posts in this view (new posts use AI credits; scored posts are reused), then asks the AI to choose the 20 most worth your time, grouping posts about the same story. Set what you care about in Settings.";
 const analyseToday = analysisButton("Analyse today's posts", () => ({
   scope: "all",
   postIds: dailyThemes(allPendingPosts, []).posts.map((post) => post.id),
@@ -523,7 +539,27 @@ const visibleCount = el("p", undefined, "muted");
 visibleCount.id = "visibleCount";
 visibleCount.setAttribute("aria-live", "polite");
 const feedHeading = el("div", undefined, "feed-heading");
-feedHeading.append(el("h1", "Your digest"), visibleCount);
+const viewToggle = el("div", undefined, "view-toggle");
+viewToggle.setAttribute("role", "group");
+viewToggle.setAttribute("aria-label", "Digest view");
+const setView = (top: boolean) => {
+  topView = top;
+  void chrome.storage.local
+    .set({ digestView: top ? "top" : "all" })
+    .catch(() => {});
+  render();
+};
+const allViewButton = button("Full list", () => setView(false));
+const topViewButton = button("Top 20", () => setView(true));
+viewToggle.append(allViewButton, topViewButton);
+const topNote = el("p", undefined, "muted top-note");
+feedHeading.append(
+  el("h1", "Your digest"),
+  visibleCount,
+  viewToggle,
+  pickTop,
+  topNote,
+);
 list.append(
   feedHeading,
   message,
@@ -836,6 +872,29 @@ function render() {
       !selectedAuthor ||
       postById.get(item.id)?.handle.toLowerCase() === selectedAuthor,
   );
+  // Top 20 view: the editor's picks in its order, ignoring display filters
+  // (the picks were chosen from the view at the time they were made).
+  const itemById = new Map((digest?.items ?? []).map((i) => [i.id, i]));
+  const pickById = new Map(topPicks?.picks.map((p) => [p.id, p]) ?? []);
+  const topActive = topView && !!topPicks;
+  const listItems = topActive
+    ? topPicks!.picks.flatMap((pick) => {
+        const item = itemById.get(pick.id);
+        return item && postById.has(pick.id) ? [item] : [];
+      })
+    : items;
+  allViewButton.setAttribute("aria-pressed", String(!topActive));
+  topViewButton.setAttribute("aria-pressed", String(topActive));
+  topViewButton.disabled = !topPicks;
+  topViewButton.title = topPicks
+    ? ""
+    : "Use Pick my top 20 to choose the posts most worth your time.";
+  topNote.hidden = !topActive;
+  topNote.textContent = topPicks
+    ? topPicks.fallback
+      ? `The AI editor was unavailable (${topPicks.fallback}), so these are the highest-scored posts, without grouping or reasons. Pick again to retry.`
+      : `Chosen by AI from ${topPicks.considered} posts on ${new Date(topPicks.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}. The reasons are AI-written; the post text below each is the original.`
+    : "";
   const view = JSON.stringify([
     scope,
     filter,
@@ -852,15 +911,16 @@ function render() {
     blacklistInput.value,
     selectedTheme,
     selectedAuthor,
+    topActive,
   ]);
   if (view !== pageView) cardPage = 0;
   pageView = view;
   cardPage = Math.min(
     cardPage,
-    Math.max(0, Math.ceil(items.length / PAGE_SIZE) - 1),
+    Math.max(0, Math.ceil(listItems.length / PAGE_SIZE) - 1),
   );
   const pageStart = cardPage * PAGE_SIZE;
-  const pageItems = items.slice(pageStart, pageStart + PAGE_SIZE);
+  const pageItems = listItems.slice(pageStart, pageStart + PAGE_SIZE);
   const feedbackById = new Map(
     postFeedback.map((entry) => [entry.id, entry.value]),
   );
@@ -923,6 +983,9 @@ function render() {
   stop.disabled = !active(run);
   stop.hidden = !active(run);
   const visibleIds = new Set(items.map((item) => item.id));
+  visibleAllIds = items.map((item) => item.id);
+  updateAnalysisButton(pickTop, run, visibleAllIds.length);
+  pickTop.textContent = `Pick my top 20 from ${visibleAllIds.length} posts`;
   visiblePendingIds = pendingAnalysisPosts(
     posts.filter((post) => visibleIds.has(post.id)),
     digest?.items ?? [],
@@ -1061,7 +1124,9 @@ function render() {
       }
     : undefined;
   cards.replaceChildren();
-  recommendedAssets.hidden = !financeSelected;
+  recommendedAssets.hidden = !financeSelected || topActive;
+  // The Top 20 view is for reading the picks; feed-wide panels wait in the full list.
+  themesPanel.hidden = topActive;
   recommendedAssets.replaceChildren();
   if (financeSelected) {
     const ranked = digest?.items ?? [];
@@ -1120,8 +1185,10 @@ function render() {
       recommendedAssets.append(table);
     }
   }
-  visibleCount.textContent = `${items.length} of ${posts.length} posts${activeTheme ? ` · ${activeTheme.label}` : ""} · ${whenSelect.options[whenSelect.selectedIndex].text.toLowerCase().replace("…", "")}${selectedAuthor ? ` · @${authors.get(selectedAuthor)!.handle}` : ""}`;
-  if (!items.length) {
+  visibleCount.textContent = topActive
+    ? `Top ${listItems.length} for you`
+    : `${items.length} of ${posts.length} posts${activeTheme ? ` · ${activeTheme.label}` : ""} · ${whenSelect.options[whenSelect.selectedIndex].text.toLowerCase().replace("…", "")}${selectedAuthor ? ` · @${authors.get(selectedAuthor)!.handle}` : ""}`;
+  if (!listItems.length) {
     // A scan that ends at once closes its X tab and lands here; say why
     // rather than showing an empty page with the reason in a tooltip. That
     // includes a scan that finished cleanly but kept nothing.
@@ -1168,7 +1235,7 @@ function render() {
     cards.append(empty);
   }
   // Rank numbers only mean something when ordered by AI insight.
-  const ranked = sort === "insight";
+  const ranked = topActive || sort === "insight";
   cards.classList.toggle("unranked", !ranked);
   for (const [pageIndex, item] of pageItems.entries()) {
     const index = pageStart + pageIndex;
@@ -1215,7 +1282,49 @@ function render() {
       );
     byline.append(sourcePills);
     content.append(byline);
+    const pick = topActive ? pickById.get(p.id) : undefined;
+    if (pick?.why) {
+      const why = el("p", undefined, "top-why");
+      why.append(
+        el("span", "AI", "ai-badge"),
+        document.createTextNode(pick.why),
+      );
+      why.title =
+        "Why this is worth your time, written by AI from the post text";
+      content.append(why);
+    }
     content.append(el("p", p.text || "No text collected", "excerpt"));
+    const similar = (pick?.similar ?? []).flatMap((id) => {
+      const other = postById.get(id);
+      return other ? [other] : [];
+    });
+    if (similar.length) {
+      const details = el("details", undefined, "top-similar");
+      details.append(
+        el(
+          "summary",
+          `+${similar.length} similar post${similar.length === 1 ? "" : "s"} on this story`,
+        ),
+      );
+      const others = el("ul");
+      for (const other of similar) {
+        const row = el("li");
+        row.append(
+          el("strong", "@" + other.handle),
+          document.createTextNode(
+            " " +
+              (other.text.length > 160
+                ? other.text.slice(0, 160) + "…"
+                : other.text) +
+              " ",
+          ),
+          link("Open on X ↗", other.url),
+        );
+        others.append(row);
+      }
+      details.append(others);
+      content.append(details);
+    }
     if (validPostLinks(p.links) && p.links.length) {
       const links = el("ul", undefined, "post-links");
       content.append(el("h3", "Links in this post"));
@@ -1322,7 +1431,7 @@ function render() {
     content.append(foot);
     cards.append(card);
   }
-  if (items.length > PAGE_SIZE) {
+  if (listItems.length > PAGE_SIZE) {
     const pagination = el("nav", undefined, "actions");
     pagination.setAttribute("aria-label", "Post pages");
     const changePage = (offset: number) => {
@@ -1338,12 +1447,12 @@ function render() {
     const previous = button("Previous page", () => changePage(-1));
     previous.disabled = cardPage === 0;
     const next = button("Next page", () => changePage(1));
-    next.disabled = pageStart + PAGE_SIZE >= items.length;
+    next.disabled = pageStart + PAGE_SIZE >= listItems.length;
     pagination.append(
       previous,
       el(
         "span",
-        `${pageStart + 1}–${Math.min(pageStart + PAGE_SIZE, items.length)} of ${items.length} posts`,
+        `${pageStart + 1}–${Math.min(pageStart + PAGE_SIZE, listItems.length)} of ${listItems.length} posts`,
       ),
       next,
     );
@@ -1524,6 +1633,7 @@ async function load() {
     );
   }
   postFeedback = await all<Feedback>("feedback");
+  topPicks = await get<TopPicks>("meta", "topPicks");
 }
 chrome.storage.onChanged.addListener((changes) => {
   if (changes["key:jev"]) void updateJevSetup().then(() => render());
